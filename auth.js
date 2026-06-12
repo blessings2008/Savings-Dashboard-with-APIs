@@ -2,7 +2,8 @@ import {
   auth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   googleProvider,
   signOut,
   onAuthStateChanged
@@ -75,7 +76,9 @@ export function renderLogin() {
   document.getElementById("btn-google").onclick = async () => {
     hideError();
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithRedirect(auth, googleProvider);
+      // Page will redirect to Google, then back here.
+      // watchAuth + getRedirectResult (called on load) handles the rest.
     } catch (e) {
       showError("Google sign-in failed. Try again.");
     }
@@ -83,6 +86,11 @@ export function renderLogin() {
 }
 
 export function watchAuth(onSignedIn, onSignedOut) {
+  // Complete any pending redirect-based sign-in (e.g. Google)
+  getRedirectResult(auth).catch((e) => {
+    console.error("Redirect sign-in error:", e.message);
+  });
+
   onAuthStateChanged(auth, (user) => {
     if (user) onSignedIn(user);
     else onSignedOut();
