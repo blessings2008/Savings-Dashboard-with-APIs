@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PocketVault — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060910;
+    --panel: #10151f;
+    --panel-2: #161d2b;
+    --border: #232c40;
+    --text: #e7ecf5;
+    --text-dim: #8b96ad;
+    --text-faint: #5b6680;
+    --accent: #00e5a0;
+    --accent-dim: rgba(0, 229, 160, 0.12);
+    --blue: #4ea8de;
+    --blue-dim: rgba(78, 168, 222, 0.12);
+    --amber: #ffb454;
+    --amber-dim: rgba(255, 180, 84, 0.12);
+    --red: #ff5c7c;
+    --red-dim: rgba(255, 92, 124, 0.12);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .display {
+    font-family: 'Syne', sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  a { color: var(--accent); text-decoration: none; }
+
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 14px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #06251c;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button.primary:hover { background: #2cf0b5; }
+  button.danger { border-color: var(--red); color: var(--red); }
+  button.danger:hover { background: var(--red-dim); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  input, select, textarea {
+    font-family: inherit;
+    font-size: 13px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  .field { margin-bottom: 14px; }
+
+  /* ===== Layout ===== */
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .logo-mark {
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px;
+    color: #06251c;
+    flex-shrink: 0;
+  }
+  .logo-text { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
+  .logo-sub { font-size: 11px; color: var(--text-faint); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: none;
+    text-align: left;
+    width: 100%;
+  }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+  .nav-icon { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 14px 20px 0;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .main { flex: 1; min-width: 0; }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 10;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .topbar-title { font-size: 18px; font-weight: 700; }
+  .topbar-right { display: flex; align-items: center; gap: 18px; }
+
+  .mode-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 11.5px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .mode-pill.mock { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,180,84,0.3); }
+  .mode-pill.live { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(0,229,160,0.3); }
+  .mode-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Float gauge — signature element */
+  .float-gauge {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--text-dim);
+    min-width: 220px;
+  }
+  .float-gauge-track {
+    flex: 1; height: 6px; border-radius: 999px;
+    background: var(--panel-2); overflow: hidden;
+    position: relative;
+  }
+  .float-gauge-fill {
+    height: 100%; border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.4s ease, background 0.4s ease;
+  }
+  .float-gauge-fill.low { background: var(--red); }
+  .float-gauge-threshold {
+    position: absolute; top: -2px; bottom: -2px;
+    width: 2px; background: var(--text-faint);
+  }
+  .float-gauge-value { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--text); white-space: nowrap; }
+
+  /* ===== Content ===== */
+  .content { padding: 24px 28px 60px; max-width: 1320px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 1100px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: relative; flex-direction: row; overflow-x: auto; padding: 12px; }
+    .logo { display: none; }
+    nav { flex-direction: row; padding: 0; }
+    .sidebar-footer { display: none; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+
+  .stat-card .stat-label {
+    font-size: 11.5px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .stat-card .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px; font-weight: 700;
+  }
+  .stat-card .stat-sub { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.red { color: var(--red); }
+
+  .section-title {
+    font-size: 13px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 28px 0 12px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  /* ===== Tables ===== */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 10px 12px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-faint); font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: var(--panel-2); }
+  .table-wrap { overflow-x: auto; }
+  .empty-row td { color: var(--text-faint); text-align: center; padding: 28px 12px; }
+
+  /* ===== Badges / status pills ===== */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge.green { background: var(--accent-dim); color: var(--accent); }
+  .badge.blue { background: var(--blue-dim); color: var(--blue); }
+  .badge.amber { background: var(--amber-dim); color: var(--amber); }
+  .badge.red { background: var(--red-dim); color: var(--red); }
+  .badge.gray { background: var(--panel-2); color: var(--text-dim); }
+
+  .amount-pos { color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+  .amount-neg { color: var(--red); font-family: 'JetBrains Mono', monospace; }
+  .amount-blue { color: var(--blue); font-family: 'JetBrains Mono', monospace; }
+
+  /* ===== Filters / toolbar ===== */
+  .toolbar {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .toolbar input[type="text"], .toolbar input[type="search"] { width: auto; min-width: 220px; }
+  .toolbar select { width: auto; }
+  .spacer { flex: 1; }
+
+  /* ===== Modal ===== */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(2,4,10,0.65);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px;
+    width: 100%; max-width: 440px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 4px; }
+  .modal .modal-sub { font-size: 12.5px; color: var(--text-dim); margin-bottom: 18px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+  /* ===== Detail / drawer ===== */
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); margin-bottom: 16px; cursor: pointer; }
+  .back-link:hover { color: var(--accent); }
+
+  .detail-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .avatar {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: var(--accent-dim); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px;
+    flex-shrink: 0;
+  }
+  .detail-name { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+  .detail-email { font-size: 12.5px; color: var(--text-dim); }
+  .detail-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .kv-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+  .kv-value { font-size: 14px; font-weight: 500; }
+  .kv-value.mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+
+  /* ===== Misc ===== */
+  .alert-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .alert-body { flex: 1; }
+  .alert-time { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+
+  .progress-track { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+
+  .note-banner {
+    background: var(--blue-dim); border: 1px solid rgba(78,168,222,0.25);
+    color: var(--blue); border-radius: 8px; padding: 10px 14px;
+    font-size: 12.5px; margin-bottom: 16px;
+  }
+
+  .loading { color: var(--text-faint); font-size: 13px; padding: 8px 0; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 11px 18px; border-radius: 8px;
+    font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+  .toast.success { border-color: rgba(0,229,160,0.3); }
+  .toast.error { border-color: rgba(255,92,124,0.3); color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">PV</div>
+      <div>
+        <div class="logo-text">PocketVault</div>
+        <div class="logo-sub">Admin</div>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-item active" data-page="overview"><span class="nav-icon">◆</span> Overview</button>
+      <button class="nav-item" data-page="revenue"><span class="nav-icon">$</span> Revenue</button>
+      <button class="nav-item" data-page="users"><span class="nav-icon">◇</span> Users</button>
+      <button class="nav-item" data-page="transactions"><span class="nav-icon">⇄</span> Transactions</button>
+      <button class="nav-item" data-page="float"><span class="nav-icon">▦</span> Float &amp; Alerts</button>
+      <button class="nav-item" data-page="messages"><span class="nav-icon">✉</span> Messages</button>
+      <button class="nav-item" data-page="system"><span class="nav-icon">⚙</span> System</button>
+    </nav>
+    <div class="sidebar-footer">
+      Signed in as admin<br>
+      <span id="sidebarMode" class="mono">—</span>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+
+    <div class="topbar">
+      <div class="topbar-title" id="pageTitle">Overview</div>
+      <div class="topbar-right">
+        <div class="float-gauge" title="Corporate float vs. minimum threshold">
+          <span>Float</span>
+          <div class="float-gauge-track">
+            <div class="float-gauge-threshold" id="floatThresholdMark" style="left: 50%;"></div>
+            <div class="float-gauge-fill" id="floatGaugeFill" style="width: 0%;"></div>
+          </div>
+          <span class="float-gauge-value" id="floatGaugeValue">—</span>
+        </div>
+        <div class="mode-pill mock" id="modePill">
+          <span class="dot"></span> <span id="modeLabel">Mock Mode</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== OVERVIEW PAGE ===== -->
+      <div class="page active" id="page-overview">
+        <div class="grid grid-4">
+          <div class="card stat-card">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value" id="ovTotalUsers">—</div>
+            <div class="stat-sub" id="ovPlanSplit">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Today's Revenue</div>
+            <div class="stat-value accent" id="ovTodayRevenue">—</div>
+            <div class="stat-sub" id="ovAllTimeRevenue">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Corporate Float</div>
+            <div class="stat-value" id="ovFloatValue">—</div>
+            <div class="stat-sub" id="ovFloatStatus">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Unresolved Alerts</div>
+            <div class="stat-value" id="ovAlertCount">—</div>
+            <div class="stat-sub">Across all systems</div>
+          </div>
+        </div>
+
+        <div class="section-title">Plan distribution</div>
+        <div class="grid grid-3" id="ovPlanCards"></div>
+
+        <div class="section-title">Recent alerts</div>
+        <div class="card" id="ovAlertsCard">
+          <div class="loading">Loading alerts…</div>
+        </div>
+      </div>
+
+      <!-- ===== REVENUE PAGE ===== -->
+      <div class="page" id="page-revenue">
+        <div class="toolbar">
+          <select id="revenuePeriod">
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d" selected>Last 30 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+
+        <div class="grid grid-3">
+          <div class="card stat-card">
+            <div class="stat-label">Revenue (selected period)</div>
+            <div class="stat-value accent" id="revPeriodTotal">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">All-time Revenue</div>
+            <div class="stat-value" id="revAllTime">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Active Subscriptions</div>
+            <div class="stat-value" id="revActiveSubs">—</div>
+            <div class="stat-sub">Pro + Business</div>
+          </div>
+        </div>
+
+        <div class="section-title">By fee type</div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fee type</th><th>Count</th><th>Total</th></tr></thead>
+              <tbody id="revByTypeBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">By plan</div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Plan</th><th>Users</th><th>Revenue</th></tr></thead>
+              <tbody id="revByPlanBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== USERS PAGE ===== -->
+      <div class="page" id="page-users">
+        <div id="usersListView">
+          <div class="toolbar">
+            <input type="search" id="userSearch" placeholder="Search by name, email, or UID…" />
+            <select id="userPlanFilter">
+              <option value="">All plans</option>
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+              <option value="business">Business</option>
+            </select>
+            <div class="spacer"></div>
+            <span class="stat-sub mono" id="usersCount">—</span>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Email</th><th>Plan</th><th>KYC</th><th>Subscription</th><th>Signed up</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="toolbar" style="margin-top:14px; justify-content:flex-end;">
+            <button id="usersLoadMore">Load more</button>
+          </div>
+        </div>
+
+        <!-- User detail view -->
+        <div id="userDetailView" style="display:none;">
+          <div class="back-link" id="userDetailBack">← Back to users</div>
+
+          <div class="detail-header">
+            <div class="avatar" id="udAvatar">?</div>
+            <div>
+              <div class="detail-name" id="udName">—</div>
+              <div class="detail-email" id="udEmail">—</div>
+            </div>
+            <div class="detail-actions">
+              <button id="udMessageBtn">Send message</button>
+              <button id="udKycBtn">KYC override</button>
+              <button id="udPlanBtn" class="primary">Adjust plan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="kv-grid">
+              <div><div class="kv-label">Plan</div><div class="kv-value" id="udPlan">—</div></div>
+              <div><div class="kv-label">Subscription</div><div class="kv-value" id="udSub">—</div></div>
+              <div><div class="kv-label">KYC status</div><div class="kv-value" id="udKyc">—</div></div>
+              <div><div class="kv-label">UID</div><div class="kv-value mono" id="udUid">—</div></div>
+              <div><div class="kv-label">Phone</div><div class="kv-value mono" id="udPhone">—</div></div>
+              <div><div class="kv-label">Signed up</div><div class="kv-value" id="udCreated">—</div></div>
+            </div>
+          </div>
+
+          <div class="section-title">Goals</div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Goal</th><th>Saved / Target</th><th>Progress</th><th>Lock</th><th>Status</th></tr></thead>
+                <tbody id="udGoalsBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-title">Recent transactions</div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Reference</th><th>Type</th><th>Amount</th><th>Fee</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody id="udTxBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-title">Auto-save rules</div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Type</th><th>Goal</th><th>Amount / Rate</th><th>Status</th></tr></thead>
+                <tbody id="udRulesBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TRANSACTIONS PAGE ===== -->
+      <div class="page" id="page-transactions">
+        <div class="toolbar">
+          <select id="txTypeFilter">
+            <option value="">All types</option>
+            <option value="savings">Savings</option>
+            <option value="withdrawal">Withdrawals</option>
+            <option value="roundup">Round-ups</option>
+            <option value="subscription">Subscriptions</option>
+            <option value="collection">Merchant collection</option>
+            <option value="disbursement">Merchant disbursement</option>
+          </select>
+          <select id="txStatusFilter">
+            <option value="">All statuses</option>
+            <option value="completed">Completed</option>
+            <option value="mock">Mock</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+          <div class="spacer"></div>
+          <button id="txReconcileAll">Run reconciliation now</button>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Reference</th><th>User</th><th>Type</th><th>Amount</th><th>Fee</th><th>Status</th><th>Date</th><th></th></tr>
+              </thead>
+              <tbody id="txTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== FLOAT & ALERTS PAGE ===== -->
+      <div class="page" id="page-float">
+        <div class="grid grid-3">
+          <div class="card stat-card">
+            <div class="stat-label">Current Float</div>
+            <div class="stat-value" id="floatCurrentValue">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Threshold</div>
+            <div class="stat-value" id="floatThresholdValue">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" id="floatStatusValue">—</div>
+          </div>
+        </div>
+
+        <div class="section-title">Float history</div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Timestamp</th><th>Balance</th><th>vs. threshold</th></tr></thead>
+              <tbody id="floatHistoryBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">Alerts</div>
+        <div class="toolbar">
+          <select id="alertFilter">
+            <option value="">All alerts</option>
+            <option value="false" selected>Unresolved only</option>
+            <option value="true">Resolved only</option>
+          </select>
+        </div>
+        <div class="card" id="alertsListCard"></div>
+      </div>
+
+      <!-- ===== MESSAGES PAGE ===== -->
+      <div class="page" id="page-messages">
+        <div class="note-banner">
+          Messages appear in the recipient's Notifications page in the PocketVault app, marked with a 📨 admin icon.
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 style="margin-bottom:14px;">Send broadcast</h3>
+            <div class="field">
+              <label>Audience</label>
+              <select id="bcTarget">
+                <option value="all">All users</option>
+                <option value="free">Free plan users</option>
+                <option value="pro">Pro plan users</option>
+                <option value="business">Business plan users</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Title</label>
+              <input type="text" id="bcTitle" maxlength="100" placeholder="e.g. New feature: Round-up savings" />
+            </div>
+            <div class="field">
+              <label>Message</label>
+              <textarea id="bcBody" maxlength="500" placeholder="Write the message body…"></textarea>
+            </div>
+            <button class="primary" id="bcSend">Send broadcast</button>
+            <div class="stat-sub" id="bcRecipientHint" style="margin-top:10px;"></div>
+          </div>
+          <div class="card">
+            <h3 style="margin-bottom:8px;">Recent broadcasts</h3>
+            <div class="stat-sub" style="margin-bottom:14px;">Logged from admin_actions</div>
+            <div id="bcHistory"><div class="loading">No broadcasts yet</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SYSTEM PAGE ===== -->
+      <div class="page" id="page-system">
+        <div class="grid grid-4">
+          <div class="card stat-card">
+            <div class="stat-label">Uptime</div>
+            <div class="stat-value" id="sysUptime">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Memory</div>
+            <div class="stat-value" id="sysMemory">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Cache size</div>
+            <div class="stat-value" id="sysCache">—</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Queue length</div>
+            <div class="stat-value" id="sysQueue">—</div>
+          </div>
+        </div>
+        <div class="section-title">Airtel configuration</div>
+        <div class="card">
+          <div class="kv-grid">
+            <div><div class="kv-label">Mode</div><div class="kv-value" id="sysAirtelMode">—</div></div>
+            <div><div class="kv-label">Webhook signature</div><div class="kv-value" id="sysWebhookSig">—</div></div>
+            <div><div class="kv-label">Last refreshed</div><div class="kv-value" id="sysLastRefresh">—</div></div>
+          </div>
+        </div>
+        <div class="stat-sub" style="margin-top:16px;">Auto-refreshes every 30 seconds.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modals ===== -->
+
+<div class="modal-backdrop" id="modalPlan">
+  <div class="modal">
+    <h3>Adjust plan</h3>
+    <div class="modal-sub">Changes the user's plan immediately. A note is required for the audit log.</div>
+    <div class="field">
+      <label>New plan</label>
+      <select id="planSelect">
+        <option value="free">Free</option>
+        <option value="pro">Pro</option>
+        <option value="business">Business</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Expiry date (optional, Pro/Business only)</label>
+      <input type="date" id="planExpiry" />
+    </div>
+    <div class="field">
+      <label>Note (required)</label>
+      <textarea id="planNote" placeholder="e.g. Comped 1 month Business for beta tester"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button id="planCancel">Cancel</button>
+      <button class="primary" id="planConfirm">Save plan change</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalKyc">
+  <div class="modal">
+    <h3>KYC override</h3>
+    <div class="modal-sub">Manually set this user's verification status.</div>
+    <div class="field">
+      <label>Status</label>
+      <select id="kycSelect">
+        <option value="verified">Verified</option>
+        <option value="failed">Failed</option>
+        <option value="unverified">Unverified</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Legal name (optional)</label>
+      <input type="text" id="kycLegalName" placeholder="As confirmed via alternate method" />
+    </div>
+    <div class="field">
+      <label>Note (required)</label>
+      <textarea id="kycNote" placeholder="e.g. Verified via WhatsApp ID photo, Airtel KYC API timed out"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button id="kycCancel">Cancel</button>
+      <button class="primary" id="kycConfirm">Save KYC override</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalMessage">
+  <div class="modal">
+    <h3>Send message</h3>
+    <div class="modal-sub" id="messageRecipientLabel">To: —</div>
+    <div class="field">
+      <label>Title</label>
+      <input type="text" id="msgTitle" maxlength="100" placeholder="e.g. About your recent withdrawal" />
+    </div>
+    <div class="field">
+      <label>Message</label>
+      <textarea id="msgBody" maxlength="500" placeholder="Write the message…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button id="msgCancel">Cancel</button>
+      <button class="primary" id="msgConfirm">Send message</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalConfirm">
+  <div class="modal">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <div class="modal-sub" id="confirmBody"></div>
+    <div class="modal-actions">
+      <button id="confirmCancel">Cancel</button>
+      <button class="primary" id="confirmOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  // =====================================================================
+  // Config & API helper
+  // =====================================================================
+  const API_BASE = '/api/admin';
+  // Admin secret is read from sessionStorage so a page reload doesn't
+  // require re-entering it, but it never touches localStorage or any
+  // persistent storage. In a real deploy, prompt for this on first load.
+  let ADMIN_SECRET = sessionStorage.getItem('pv_admin_secret') || '';
+
+  if (!ADMIN_SECRET) {
+    ADMIN_SECRET = window.prompt('Enter admin secret:') || '';
+    if (ADMIN_SECRET) sessionStorage.setItem('pv_admin_secret', ADMIN_SECRET);
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-secret': ADMIN_SECRET,
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Request failed (${res.status})`);
+    }
+    return res.json();
+  }
+
+  // =====================================================================
+  // Formatting helpers
+  // =====================================================================
+  function fmtMWK(n) {
+    if (n === null || n === undefined) return '—';
+    return 'MWK ' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  }
+  function fmtDate(ms) {
+    if (!ms) return '—';
+    return new Date(ms).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  }
+  function fmtRelative(ms) {
+    if (!ms) return '—';
+    const diff = Date.now() - ms;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
+  function statusBadge(status) {
+    const map = {
+      completed: ['green', '✓ Completed'],
+      mock: ['blue', 'Mock'],
+      pending: ['amber', 'Pending'],
+      failed: ['red', 'Failed'],
+      verified: ['green', '✓ Verified'],
+      unverified: ['gray', 'Unverified'],
+    };
+    const [cls, label] = map[status] || ['gray', status || '—'];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+  function planBadge(plan) {
+    const map = { free: 'gray', pro: 'blue', business: 'green' };
+    return `<span class="badge ${map[plan] || 'gray'}">${(plan || 'free').toUpperCase()}</span>`;
+  }
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function showToast(message, type = '') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast show' + (type ? ' ' + type : '');
+    setTimeout(() => { toast.className = 'toast'; }, 3200);
+  }
+
+  // =====================================================================
+  // Navigation
+  // =====================================================================
+  const pageTitles = {
+    overview: 'Overview',
+    revenue: 'Revenue',
+    users: 'Users',
+    transactions: 'Transactions',
+    float: 'Float & Alerts',
+    messages: 'Messages',
+    system: 'System',
+  };
+
+  function goToPage(page) {
+    document.querySelectorAll('.page').forEach((el) => el.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach((el) => el.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
+    document.getElementById('pageTitle').textContent = pageTitles[page];
+
+    if (page === 'overview') loadOverview();
+    if (page === 'revenue') loadRevenue();
+    if (page === 'users') loadUsersList();
+    if (page === 'transactions') loadTransactions();
+    if (page === 'float') loadFloatPage();
+    if (page === 'system') loadSystem();
+  }
+
+  document.querySelectorAll('.nav-item').forEach((btn) => {
+    btn.addEventListener('click', () => goToPage(btn.dataset.page));
+  });
+
+  // =====================================================================
+  // Top bar: mode pill + float gauge
+  // =====================================================================
+  function setMode(mockMode) {
+    const pill = document.getElementById('modePill');
+    const label = document.getElementById('modeLabel');
+    const sidebarMode = document.getElementById('sidebarMode');
+    pill.className = 'mode-pill ' + (mockMode ? 'mock' : 'live');
+    label.textContent = mockMode ? 'Mock Mode' : 'Live Mode';
+    sidebarMode.textContent = mockMode ? 'AIRTEL: MOCK' : 'AIRTEL: LIVE';
+  }
+
+  function setFloatGauge(value, threshold) {
+    const fill = document.getElementById('floatGaugeFill');
+    const valueEl = document.getElementById('floatGaugeValue');
+    const thresholdMark = document.getElementById('floatThresholdMark');
+    // Scale: 0 to (threshold * 3) maps to 0-100% of the bar.
+    const max = threshold * 3 || 1;
+    const pct = Math.min(100, Math.max(0, (value / max) * 100));
+    const thresholdPct = Math.min(100, (threshold / max) * 100);
+    fill.style.width = pct + '%';
+    thresholdMark.style.left = thresholdPct + '%';
+    fill.classList.toggle('low', value < threshold);
+    valueEl.textContent = fmtMWK(value);
+  }
+
+  // =====================================================================
+  // OVERVIEW
+  // =====================================================================
+  async function loadOverview() {
+    try {
+      const data = await api('/overview');
+
+      document.getElementById('ovTotalUsers').textContent = data.userCounts.total.toLocaleString();
+      document.getElementById('ovPlanSplit').textContent =
+        `${data.userCounts.free} Free · ${data.userCounts.pro} Pro · ${data.userCounts.business} Business`;
+
+      document.getElementById('ovTodayRevenue').textContent = fmtMWK(data.revenue.today);
+      document.getElementById('ovAllTimeRevenue').textContent = `${fmtMWK(data.revenue.allTime)} all-time`;
+
+      document.getElementById('ovFloatValue').textContent = fmtMWK(data.float.value);
+      const floatStatusEl = document.getElementById('ovFloatStatus');
+      if (data.float.low) {
+        floatStatusEl.innerHTML = `<span style="color:var(--red)">Below threshold (${fmtMWK(data.float.threshold)})</span>`;
+        document.getElementById('ovFloatValue').className = 'stat-value red';
+      } else {
+        floatStatusEl.innerHTML = `Healthy · threshold ${fmtMWK(data.float.threshold)}`;
+        document.getElementById('ovFloatValue').className = 'stat-value';
+      }
+
+      const alertCountEl = document.getElementById('ovAlertCount');
+      alertCountEl.textContent = data.unresolvedAlertCount;
+      alertCountEl.className = 'stat-value' + (data.unresolvedAlertCount > 0 ? ' amber' : '');
+
+      setMode(data.mockMode !== false); // default to mock if not specified
+      setFloatGauge(data.float.value, data.float.threshold);
+
+      // Plan cards
+      const planCards = document.getElementById('ovPlanCards');
+      const plans = [
+        { key: 'free', label: 'Free', color: 'gray' },
+        { key: 'pro', label: 'Pro', color: 'blue' },
+        { key: 'business', label: 'Business', color: 'green' },
+      ];
+      planCards.innerHTML = plans.map((p) => `
+        <div class="card stat-card">
+          <div class="stat-label">${p.label} plan</div>
+          <div class="stat-value">${data.userCounts[p.key] ?? 0}</div>
+          <div class="stat-sub">${data.userCounts.total ? Math.round((data.userCounts[p.key] / data.userCounts.total) * 100) : 0}% of users</div>
+        </div>
+      `).join('');
+
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+
+    loadOverviewAlerts();
+  }
+
+  async function loadOverviewAlerts() {
+    const card = document.getElementById('ovAlertsCard');
+    try {
+      const data = await api('/alerts?resolved=false');
+      if (!data.alerts.length) {
+        card.innerHTML = '<div class="loading">No unresolved alerts. Everything looks healthy.</div>';
+        return;
+      }
+      card.innerHTML = data.alerts.slice(0, 5).map((a) => `
+        <div class="alert-item">
+          <div class="alert-icon">⚠</div>
+          <div class="alert-body">
+            <div>${escapeHtml(a.message || a.type || 'Alert')}</div>
+            <div class="alert-time">${fmtRelative(toMillisClient(a.timestamp))}</div>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      card.innerHTML = `<div class="loading">Couldn't load alerts.</div>`;
+    }
+  }
+
+  // Client-side fallback for converting Firestore-ish timestamps that
+  // may arrive as ISO strings, millis, or {_seconds: ...} objects.
+  function toMillisClient(ts) {
+    if (!ts) return null;
+    if (typeof ts === 'number') return ts;
+    if (typeof ts === 'string') return new Date(ts).getTime();
+    if (ts._seconds) return ts._seconds * 1000;
+    if (ts.seconds) return ts.seconds * 1000;
+    return null;
+  }
+
+  // =====================================================================
+  // REVENUE
+  // =====================================================================
+  async function loadRevenue() {
+    const period = document.getElementById('revenuePeriod').value;
+    try {
+      const data = await api(`/revenue?period=${period}`);
+
+      document.getElementById('revPeriodTotal').textContent = fmtMWK(data.periodTotal);
+      document.getElementById('revAllTime').textContent = fmtMWK(data.allTimeTotal);
+      document.getElementById('revActiveSubs').textContent =
+        (data.activeSubscriptions?.pro ?? 0) + (data.activeSubscriptions?.business ?? 0);
+
+      const byTypeBody = document.getElementById('revByTypeBody');
+      const types = data.byType || {};
+      const typeKeys = Object.keys(types);
+      byTypeBody.innerHTML = typeKeys.length
+        ? typeKeys.map((k) => `
+            <tr>
+              <td>${escapeHtml(k)}</td>
+              <td class="mono">${types[k].count ?? '—'}</td>
+              <td class="amount-pos">${fmtMWK(types[k].total)}</td>
+            </tr>`).join('')
+        : '<tr class="empty-row"><td colspan="3">No fee data yet</td></tr>';
+
+      const byPlanBody = document.getElementById('revByPlanBody');
+      const plans = data.byPlan || {};
+      const planKeys = Object.keys(plans);
+      byPlanBody.innerHTML = planKeys.length
+        ? planKeys.map((k) => `
+            <tr>
+              <td>${planBadge(k)}</td>
+              <td class="mono">${plans[k].userCount ?? '—'}</td>
+              <td class="amount-pos">${fmtMWK(plans[k].total)}</td>
+            </tr>`).join('')
+        : '<tr class="empty-row"><td colspan="3">No revenue data yet</td></tr>';
+
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+  document.getElementById('revenuePeriod').addEventListener('change', loadRevenue);
+
+  // =====================================================================
+  // USERS — list
+  // =====================================================================
+  let usersCursor = null;
+  let usersAccum = [];
+
+  async function loadUsersList(reset = true) {
+    if (reset) { usersCursor = null; usersAccum = []; }
+
+    const search = document.getElementById('userSearch').value.trim();
+    const plan = document.getElementById('userPlanFilter').value;
+
+    const params = new URLSearchParams({ limit: '25' });
+    if (search) params.set('search', search);
+    if (plan) params.set('plan', plan);
+    if (usersCursor) params.set('cursor', usersCursor);
+
+    try {
+      const data = await api('/users?' + params.toString());
+      usersAccum = reset ? data.users : usersAccum.concat(data.users);
+      usersCursor = data.nextCursor;
+
+      document.getElementById('usersCount').textContent = `${usersAccum.length} of ${data.total}`;
+      document.getElementById('usersLoadMore').style.display = usersCursor ? '' : 'none';
+
+      const body = document.getElementById('usersTableBody');
+      body.innerHTML = usersAccum.length
+        ? usersAccum.map((u) => `
+            <tr class="clickable" data-uid="${escapeHtml(u.uid)}">
+              <td>${escapeHtml(u.displayName || '—')}</td>
+              <td class="mono">${escapeHtml(u.email || '—')}</td>
+              <td>${planBadge(u.plan)}</td>
+              <td>${statusBadge(u.kycStatus)}</td>
+              <td>${u.subscriptionActive ? `<span class="badge green">Active</span>` : `<span class="badge gray">—</span>`}</td>
+              <td>${fmtDate(u.createdAt)}</td>
+            </tr>`).join('')
+        : '<tr class="empty-row"><td colspan="6">No users match these filters</td></tr>';
+
+      body.querySelectorAll('tr.clickable').forEach((row) => {
+        row.addEventListener('click', () => openUserDetail(row.dataset.uid));
+      });
+
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  let searchDebounce;
+  document.getElementById('userSearch').addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => loadUsersList(true), 300);
+  });
+  document.getElementById('userPlanFilter').addEventListener('change', () => loadUsersList(true));
+  document.getElementById('usersLoadMore').addEventListener('click', () => loadUsersList(false));
+
+  // =====================================================================
+  // USERS — detail
+  // =====================================================================
+  let currentUserUid = null;
+  let currentUserData = null;
+
+  async function openUserDetail(uid) {
+    currentUserUid = uid;
+    document.getElementById('usersListView').style.display = 'none';
+    document.getElementById('userDetailView').style.display = 'block';
+
+    try {
+      const data = await api(`/users/${uid}`);
+      currentUserData = data;
+      renderUserDetail(data);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  function renderUserDetail(data) {
+    const p = data.profile || {};
+    const name = p.displayName || p.email || 'Unknown user';
+
+    document.getElementById('udAvatar').textContent = (name[0] || '?').toUpperCase();
+    document.getElementById('udName').textContent = name;
+    document.getElementById('udEmail').textContent = p.email || '—';
+    document.getElementById('udPlan').innerHTML = planBadge(p.plan);
+    document.getElementById('udSub').textContent = p.subscriptionActive
+      ? `Active${p.subscriptionExpiry ? ' · expires ' + fmtDate(toMillisClient(p.subscriptionExpiry)) : ''}`
+      : 'Not active';
+    document.getElementById('udKyc').innerHTML = statusBadge(p.kycStatus || 'unverified');
+    document.getElementById('udUid').textContent = data.uid;
+    document.getElementById('udPhone').textContent = p.phone || '—';
+    document.getElementById('udCreated').textContent = fmtDate(toMillisClient(p.createdAt));
+
+    // Goals
+    const goalsBody = document.getElementById('udGoalsBody');
+    goalsBody.innerHTML = data.goals.length
+      ? data.goals.map((g) => {
+          const pct = g.target ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
+          const lock = g.lockType === 'locked' ? '<span class="badge amber">🔒 Locked</span>' : '<span class="badge gray">Flexible</span>';
+          const status = g.completed ? '<span class="badge green">✅ Done</span>' : statusBadge('pending').replace('Pending', 'Active');
+          return `<tr>
+            <td>${escapeHtml(g.emoji || '🎯')} ${escapeHtml(g.name || 'Goal')}</td>
+            <td class="mono">${fmtMWK(g.saved)} / ${fmtMWK(g.target)}</td>
+            <td><div class="progress-track" style="width:100px;"><div class="progress-fill" style="width:${pct}%;"></div></div></td>
+            <td>${lock}</td>
+            <td>${g.completed ? '<span class="badge green">✅ Done</span>' : '<span class="badge blue">Active</span>'}</td>
+          </tr>`;
+        }).join('')
+      : '<tr class="empty-row"><td colspan="5">No goals yet</td></tr>';
+
+    // Transactions
+    const txBody = document.getElementById('udTxBody');
+    txBody.innerHTML = data.transactions.length
+      ? data.transactions.map((t) => `
+          <tr>
+            <td class="mono">${escapeHtml(t.reference || t.id)}</td>
+            <td>${escapeHtml(t.type || '—')}</td>
+            <td class="${t.type === 'withdrawal' ? 'amount-pos' : 'amount-neg'}">${fmtMWK(t.amount)}</td>
+            <td class="mono">${fmtMWK(t.fee)}</td>
+            <td>${statusBadge(t.status)}</td>
+            <td>${fmtDate(toMillisClient(t.timestamp))}</td>
+          </tr>`).join('')
+      : '<tr class="empty-row"><td colspan="6">No transactions yet</td></tr>';
+
+    // Autosave rules
+    const rulesBody = document.getElementById('udRulesBody');
+    rulesBody.innerHTML = data.autosaveRules.length
+      ? data.autosaveRules.map((r) => `
+          <tr>
+            <td>${escapeHtml(r.type || '—')}</td>
+            <td>${escapeHtml(r.goalName || r.goalId || '—')}</td>
+            <td class="mono">${r.amount ? fmtMWK(r.amount) : (r.percent ? r.percent + '%' : '—')}</td>
+            <td>${r.enabled ? '<span class="badge green">On</span>' : '<span class="badge gray">Off</span>'}</td>
+          </tr>`).join('')
+      : '<tr class="empty-row"><td colspan="4">No auto-save rules</td></tr>';
+  }
+
+  document.getElementById('userDetailBack').addEventListener('click', () => {
+    document.getElementById('userDetailView').style.display = 'none';
+    document.getElementById('usersListView').style.display = 'block';
+  });
+
+  // ---- Plan modal ----
+  document.getElementById('udPlanBtn').addEventListener('click', () => {
+    if (currentUserData) {
+      document.getElementById('planSelect').value = currentUserData.profile.plan || 'free';
+    }
+    document.getElementById('planNote').value = '';
+    document.getElementById('planExpiry').value = '';
+    openModal('modalPlan');
+  });
+  document.getElementById('planCancel').addEventListener('click', () => closeModal('modalPlan'));
+  document.getElementById('planConfirm').addEventListener('click', async () => {
+    const plan = document.getElementById('planSelect').value;
+    const expiryDate = document.getElementById('planExpiry').value;
+    const note = document.getElementById('planNote').value.trim();
+    if (!note) { showToast('A note is required', 'error'); return; }
+
+    try {
+      await api(`/users/${currentUserUid}/plan`, {
+        method: 'PATCH',
+        body: JSON.stringify({ plan, expiryDate: expiryDate || undefined, note }),
+      });
+      showToast('Plan updated', 'success');
+      closeModal('modalPlan');
+      openUserDetail(currentUserUid);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
+  // ---- KYC modal ----
+  document.getElementById('udKycBtn').addEventListener('click', () => {
+    if (currentUserData) {
+      document.getElementById('kycSelect').value = currentUserData.profile.kycStatus || 'unverified';
+      document.getElementById('kycLegalName').value = currentUserData.profile.legalName || '';
+    }
+    document.getElementById('kycNote').value = '';
+    openModal('modalKyc');
+  });
+  document.getElementById('kycCancel').addEventListener('click', () => closeModal('modalKyc'));
+  document.getElementById('kycConfirm').addEventListener('click', async () => {
+    const status = document.getElementById('kycSelect').value;
+    const legalName = document.getElementById('kycLegalName').value.trim();
+    const note = document.getElementById('kycNote').value.trim();
+    if (!note) { showToast('A note is required', 'error'); return; }
+
+    try {
+      await api(`/users/${currentUserUid}/kyc`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, legalName: legalName || undefined, note }),
+      });
+      showToast('KYC status updated', 'success');
+      closeModal('modalKyc');
+      openUserDetail(currentUserUid);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
+  // ---- Message modal (single user) ----
+  document.getElementById('udMessageBtn').addEventListener('click', () => {
+    document.getElementById('messageRecipientLabel').textContent =
+      `To: ${currentUserData?.profile?.displayName || currentUserData?.profile?.email || currentUserUid}`;
+    document.getElementById('msgTitle').value = '';
+    document.getElementById('msgBody').value = '';
+    openModal('modalMessage');
+  });
+  document.getElementById('msgCancel').addEventListener('click', () => closeModal('modalMessage'));
+  document.getElementById('msgConfirm').addEventListener('click', async () => {
+    const title = document.getElementById('msgTitle').value.trim();
+    const body = document.getElementById('msgBody').value.trim();
+    if (!title || !body) { showToast('Title and message are required', 'error'); return; }
+
+    try {
+      await api(`/users/${currentUserUid}/message`, {
+        method: 'POST',
+        body: JSON.stringify({ title, body }),
+      });
+      showToast('Message sent', 'success');
+      closeModal('modalMessage');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
+  // =====================================================================
+  // TRANSACTIONS
+  // =====================================================================
+  async function loadTransactions() {
+    const type = document.getElementById('txTypeFilter').value;
+    const status = document.getElementById('txStatusFilter').value;
+
+    const params = new URLSearchParams({ limit: '50' });
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+
+    try {
+      const data = await api('/transactions?' + params.toString());
+      const body = document.getElementById('txTableBody');
+
+      body.innerHTML = data.transactions.length
+        ? data.transactions.map((t) => `
+            <tr>
+              <td class="mono">${escapeHtml(t.reference || t.id)}</td>
+              <td class="mono">${escapeHtml((t.uid || '').slice(0, 10))}…</td>
+              <td>${escapeHtml(t.type || '—')}</td>
+              <td class="${t.type === 'withdrawal' ? 'amount-pos' : 'amount-neg'}">${fmtMWK(t.amount)}</td>
+              <td class="mono">${fmtMWK(t.fee)}</td>
+              <td>${statusBadge(t.status)}</td>
+              <td>${fmtDate(toMillisClient(t.timestamp))}</td>
+              <td>${t.status === 'pending' ? `<button data-ref="${escapeHtml(t.reference)}" class="tx-recheck">Recheck</button>` : ''}</td>
+            </tr>`).join('')
+        : '<tr class="empty-row"><td colspan="8">No transactions match these filters</td></tr>';
+
+      body.querySelectorAll('.tx-recheck').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = 'Checking…';
+          try {
+            const result = await api(`/transactions/${btn.dataset.ref}/recheck`, { method: 'POST' });
+            showToast(`Airtel status: ${result.airtelStatus?.status || 'unknown'}`, 'success');
+          } catch (err) {
+            showToast(err.message, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Recheck';
+          }
+        });
+      });
+
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  document.getElementById('txTypeFilter').addEventListener('change', loadTransactions);
+  document.getElementById('txStatusFilter').addEventListener('change', loadTransactions);
+
+  document.getElementById('txReconcileAll').addEventListener('click', () => {
+    showConfirm(
+      'Run reconciliation now?',
+      'This checks all pending transactions older than 2 minutes against Airtel and updates them accordingly.',
+      async () => {
+        try {
+          const result = await api('/reconcile', { method: 'POST', body: JSON.stringify({}) });
+          showToast(`Reconciliation complete: ${JSON.stringify(result.result)}`, 'success');
+          loadTransactions();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+    );
+  });
+
+  // =====================================================================
+  // FLOAT & ALERTS
+  // =====================================================================
+  async function loadFloatPage() {
+    try {
+      const overview = await api('/overview');
+      document.getElementById('floatCurrentValue').textContent = fmtMWK(overview.float.value);
+      document.getElementById('floatThresholdValue').textContent = fmtMWK(overview.float.threshold);
+      const statusEl = document.getElementById('floatStatusValue');
+      if (overview.float.low) {
+        statusEl.textContent = 'Below threshold';
+        statusEl.className = 'stat-value red';
+      } else {
+        statusEl.textContent = 'Healthy';
+        statusEl.className = 'stat-value accent';
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+
+    try {
+      const data = await api('/float-history?limit=20');
+      const body = document.getElementById('floatHistoryBody');
+      body.innerHTML = data.history.length
+        ? data.history.map((h) => {
+            const threshold = h.threshold ?? null;
+            const diff = threshold !== null ? h.balance - threshold : null;
+            return `<tr>
+              <td>${fmtDate(toMillisClient(h.timestamp))}</td>
+              <td class="mono">${fmtMWK(h.balance)}</td>
+              <td class="${diff !== null && diff < 0 ? 'amount-neg' : 'amount-pos'}">${diff !== null ? (diff >= 0 ? '+' : '') + fmtMWK(diff) : '—'}</td>
+            </tr>`;
+          }).join('')
+        : '<tr class="empty-row"><td colspan="3">No float history yet</td></tr>';
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+
+    loadAlertsList();
+  }
+
+  async function loadAlertsList() {
+    const resolved = document.getElementById('alertFilter').value;
+    const card = document.getElementById('alertsListCard');
+
+    try {
+      const params = resolved ? `?resolved=${resolved}` : '';
+      const data = await api('/alerts' + params);
+
+      card.innerHTML = data.alerts.length
+        ? data.alerts.map((a) => `
+            <div class="alert-item">
+              <div class="alert-icon">${a.resolved ? '✅' : '⚠'}</div>
+              <div class="alert-body">
+                <div>${escapeHtml(a.message || a.type || 'Alert')}</div>
+                <div class="alert-time">${fmtRelative(toMillisClient(a.timestamp))}</div>
+              </div>
+              ${!a.resolved ? `<button data-id="${escapeHtml(a.id)}" class="alert-resolve">Mark resolved</button>` : ''}
+            </div>`).join('')
+        : '<div class="loading">No alerts to show</div>';
+
+      card.querySelectorAll('.alert-resolve').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          try {
+            await api(`/alerts/${btn.dataset.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ resolved: true }),
+            });
+            showToast('Alert resolved', 'success');
+            loadAlertsList();
+            loadOverview();
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+        });
+      });
+    } catch (err) {
+      card.innerHTML = `<div class="loading">Couldn't load alerts.</div>`;
+    }
+  }
+  document.getElementById('alertFilter').addEventListener('change', loadAlertsList);
+
+  // =====================================================================
+  // MESSAGES (broadcast)
+  // =====================================================================
+  document.getElementById('bcTarget').addEventListener('change', updateBroadcastHint);
+  async function updateBroadcastHint() {
+    const target = document.getElementById('bcTarget').value;
+    try {
+      const params = new URLSearchParams({ limit: '1' });
+      if (target !== 'all') params.set('plan', target);
+      const data = await api('/users?' + params.toString());
+      document.getElementById('bcRecipientHint').textContent =
+        `Will reach approximately ${data.total} user(s).`;
+    } catch {
+      document.getElementById('bcRecipientHint').textContent = '';
+    }
+  }
+  updateBroadcastHint();
+
+  document.getElementById('bcSend').addEventListener('click', () => {
+    const target = document.getElementById('bcTarget').value;
+    const title = document.getElementById('bcTitle').value.trim();
+    const body = document.getElementById('bcBody').value.trim();
+    if (!title || !body) { showToast('Title and message are required', 'error'); return; }
+
+    showConfirm(
+      'Send broadcast?',
+      `This sends a notification to ${target === 'all' ? 'all users' : target + '-plan users'}. This can't be undone.`,
+      async () => {
+        try {
+          const result = await api('/broadcast', {
+            method: 'POST',
+            body: JSON.stringify({ title, body, targetPlan: target }),
+          });
+          showToast(`Queued for ${result.recipientCount} user(s)`, 'success');
+          document.getElementById('bcTitle').value = '';
+          document.getElementById('bcBody').value = '';
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+    );
+  });
+
+  // =====================================================================
+  // SYSTEM
+  // =====================================================================
+  let systemInterval = null;
+  async function loadSystem() {
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      document.getElementById('sysUptime').textContent = data.uptime || '—';
+      document.getElementById('sysMemory').textContent = data.memory || '—';
+      document.getElementById('sysCache').textContent = data.cacheSize ?? '—';
+      document.getElementById('sysQueue').textContent = data.queueLength ?? '—';
+      document.getElementById('sysAirtelMode').innerHTML = data.airtelConfigured
+        ? '<span class="badge green">Live</span>'
+        : '<span class="badge amber">Mock</span>';
+      document.getElementById('sysWebhookSig').innerHTML = data.webhookSecretConfigured
+        ? '<span class="badge green">Enabled</span>'
+        : '<span class="badge gray">Disabled</span>';
+      document.getElementById('sysLastRefresh').textContent = fmtDate(Date.now());
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+
+    if (!systemInterval) {
+      systemInterval = setInterval(() => {
+        if (document.getElementById('page-system').classList.contains('active')) loadSystem();
+      }, 30000);
+    }
+  }
+
+  // =====================================================================
+  // Modal helpers
+  // =====================================================================
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) backdrop.classList.remove('open');
+    });
+  });
+
+  let confirmCallback = null;
+  function showConfirm(title, body, onConfirm) {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmBody').textContent = body;
+    confirmCallback = onConfirm;
+    openModal('modalConfirm');
+  }
+  document.getElementById('confirmCancel').addEventListener('click', () => closeModal('modalConfirm'));
+  document.getElementById('confirmOk').addEventListener('click', () => {
+    closeModal('modalConfirm');
+    if (confirmCallback) confirmCallback();
+  });
+
+  // =====================================================================
+  // Init
+  // =====================================================================
+  loadOverview();
+})();
+</script>
+
+</body>
+</html>
