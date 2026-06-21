@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// ============================================================
+// PocketVault Firestore Security Rules
+// ============================================================
+// PocketVault's backend (server.js) uses the Firebase Admin SDK,
+// which ALWAYS bypasses these rules regardless of what they say.
+// These rules only govern direct access from client SDKs
+// (web, iOS, Android) — and PocketVault's frontend never uses
+// the Firestore client SDK; every read/write goes through the
+// backend's REST API, which independently verifies the caller's
+// identity and ownership on every request.
+//
+// Therefore these rules deny ALL direct client access by design.
+// If Firestore is ever in "test mode" (open by default for 30
+// days after project creation) or has any other permissive
+// rules deployed, deploying this file closes that gap completely
+// — even though the backend was already safe, this removes the
+// possibility of someone bypassing the backend entirely by using
+// the Firestore client SDK directly with the public firebaseConfig.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Deny everything by default. No exceptions.
+    // All legitimate access happens through the backend's
+    // Admin SDK connection, which is not subject to these rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
