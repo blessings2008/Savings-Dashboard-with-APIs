@@ -241,7 +241,6 @@ async function callAI(systemPrompt, userMessage, maxTokens = 1024) {
   if (provider === 'anthropic') return callAnthropic(systemPrompt, userMessage, maxTokens);
   return callGemini(systemPrompt, userMessage, maxTokens);
 }
-}
 
 // ----------------------------
 // CACHE
