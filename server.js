@@ -1806,7 +1806,11 @@ app.use(sanitizeBody);
 app.use(express.static(__dirname));
 app.set('trust proxy', 1);
 
-app.use('/api/', rateLimit(100, 15 * 60 * 1000));
+// Raised from 100/15min — that ceiling applies globally across every
+// /api/ route including admin panel page loads (which fire several
+// calls each) and AI chat (which can chain multiple tool-call steps
+// per question). Normal admin usage was tripping this.
+app.use('/api/', rateLimit(300, 15 * 60 * 1000));
 app.use('/api/save', rateLimit(10, 60 * 1000));
 app.use('/api/withdraw', rateLimit(5, 60 * 1000));
 app.use('/api/subscribe', rateLimit(5, 60 * 1000));
@@ -3661,7 +3665,10 @@ async function logSystemError(source, message, extra = {}) {
 // Rate limited to 5 attempts per 15 minutes (per IP).
 // Uses crypto.timingSafeEqual to prevent timing side-channel attacks.
 // ----------------------------
-app.post('/api/admin/login', rateLimit(5, 15 * 60 * 1000), asyncHandler(async (req, res) => {
+// Rate limit relaxed from 5/15min — that was tight enough to trip
+// during completely normal use. 20/15min still makes brute-forcing
+// a real ADMIN_SECRET impractical while not punishing legitimate use.
+app.post('/api/admin/login', rateLimit(20, 15 * 60 * 1000), asyncHandler(async (req, res) => {
   const { secret } = req.body;
   if (!process.env.ADMIN_SECRET) {
     return res.status(503).json({ success: false, error: 'Admin access not configured on this server' });
@@ -4173,43 +4180,54 @@ app.post('/api/admin/ai/chat', requireAdmin, rateLimit(20, 60 * 1000), asyncHand
 You respond ONLY in strict JSON, one of these four shapes — no markdown, no prose outside the JSON:
 
 1. To fetch data before answering:
-{"type":"tool_call","tool":"<tool_name>","args":{...}}
+{"thinking":"your reasoning about what you need and why, written out step by step","type":"tool_call","tool":"<tool_name>","args":{...}}
 
 Available tools:
 ${toolList}
 
 2. To propose a real action (sending a message, suspending a user, etc) — ONLY do this when the founder has clearly asked for the action to be taken, not just discussed:
-{"type":"action_proposal","action":"<action_name>","args":{...},"summary":"one sentence describing exactly what will happen, for the founder to confirm"}
+{"thinking":"your reasoning for why this action, with these exact args, is the right response","type":"action_proposal","action":"<action_name>","args":{...},"summary":"one sentence describing exactly what will happen, for the founder to confirm"}
 
 Available actions:
 ${actionList}
 
 3. To give a final plain-English answer (most common):
-{"type":"answer","text":"your answer here"}
+{"thinking":"walk through your reasoning here — what the data shows, how it answers the question, and anything you double-checked before committing to this answer","type":"answer","text":"your answer here"}
 
 4. To remember something durable for future conversations — a correction, a standing preference, or context worth not forgetting (e.g. "Business-plan withdrawals over 500k aren't unusual, don't flag them"). Only use this for things genuinely worth remembering long-term, not routine facts:
-{"type":"answer","text":"your answer here","remember":"the specific thing to remember, written as a standalone fact"}
+{"thinking":"...","type":"answer","text":"your answer here","remember":"the specific thing to remember, written as a standalone fact"}
+
+How to reason well (this is what separates a good answer from a shallow one):
+- ALWAYS fill in "thinking" first, genuinely — work through the problem step by step in your own words before deciding what to do. Don't skip straight to an action. Treat it like you're thinking out loud to yourself, not writing a summary for someone else.
+- Break multi-part questions into parts explicitly in your thinking (e.g. "This has two parts: (1) find unverified users, (2) check which of those have pending transactions. I need tool A first, then tool B filtered by the result.").
+- When a tool result surprises you, or doesn't fully answer the question, say so in your thinking and decide whether you need another tool call rather than papering over the gap.
+- Before finalizing an "answer", use your thinking to sanity-check it against the actual data you retrieved: does every number in your answer trace back to something a tool actually returned? If you're about to state something you don't have data for, that's a signal to make another tool_call instead.
+- If a question has multiple reasonable interpretations, name them in your thinking and pick the most likely one explicitly, or ask a clarifying question if it genuinely matters which one.
+- It's fine — expected, even — to take several tool_calls in sequence to fully answer something. Don't rush to a shallow answer just to finish quickly.
 
 Critical rules:
 - If the founder's request is ambiguous (e.g. "remind that user" with no clear single referent), respond with type "answer" and ASK a clarifying question. Never guess which user they mean.
 - Only propose an action when explicitly asked to take one ("send it", "remind them", "suspend that user") — not when just discussing hypotheticals.
 - Never invent numbers or user data. If you need data, request a tool_call first.
-- Keep "answer" text concise — 2-4 sentences unless detail was explicitly requested.
+- Keep the final "text" concise and conversational — 2-5 sentences unless real detail was explicitly requested. Your "thinking" can be as long as it needs to be; "text" should read like a sharp, direct answer, not a report.
 - Use MWK for currency.
-- You may need multiple tool_calls in sequence before you have enough to answer — that's fine, request one at a time.
 - You have access to the full conversation history below, including anything from earlier today or previous sessions — use it, don't ask the founder to repeat context they already gave you.${notesBlock}`;
 
-  // Tool-calling loop: model may request data 1+ times before
-  // giving a final answer or proposing an action. Cap iterations
-  // to prevent runaway loops burning through API quota.
-  const MAX_ITERATIONS = 4;
+  // Tool-calling loop with genuine multi-step reasoning room. Raised
+  // from 4 to 8 iterations — 4 was cutting off legitimate multi-part
+  // questions right when they needed one more step. Token budget
+  // raised similarly so the model has room for real "thinking" text
+  // rather than truncating it.
+  const MAX_ITERATIONS = 8;
   let workingContext = '';
   let finalResult = null;
+  let lastThinking = '';
+  const toolCallLog = []; // for the self-check pass and for debugging
 
   try {
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const prompt = `${workingContext}\n\nConversation so far:\n${conversationText}\n\nRespond with the JSON envelope now.`;
-      const raw = await callAI(systemPrompt, prompt, 900);
+      const prompt = `${workingContext}\n\nConversation so far:\n${conversationText}\n\nRespond with the JSON envelope now. Remember to genuinely reason in "thinking" before deciding the type.`;
+      const raw = await callAI(systemPrompt, prompt, 1600);
 
       let parsed;
       try {
@@ -4220,6 +4238,8 @@ Critical rules:
         break;
       }
 
+      if (parsed.thinking) lastThinking = parsed.thinking;
+
       if (parsed.type === 'tool_call') {
         const tool = AI_TOOLS[parsed.tool];
         if (!tool) {
@@ -4228,9 +4248,13 @@ Critical rules:
         }
         try {
           const toolResult = await tool.fn(parsed.args || {});
-          workingContext += `\n\n[Result of ${parsed.tool}]:\n${JSON.stringify(toolResult).slice(0, 4000)}`;
+          toolCallLog.push({ tool: parsed.tool, args: parsed.args, resultSummary: JSON.stringify(toolResult).slice(0, 200) });
+          workingContext += `\n\n[Your reasoning was: ${parsed.thinking || '(none given)'}]\n[Result of ${parsed.tool}]:\n${JSON.stringify(toolResult).slice(0, 4000)}`;
         } catch (toolErr) {
-          workingContext += `\n\n[Tool "${parsed.tool}" failed: ${toolErr.message}]`;
+          // Structured recovery: tell the model explicitly that this
+          // path failed so it can try a different approach rather
+          // than silently continuing and potentially inventing data.
+          workingContext += `\n\n[Tool "${parsed.tool}" failed: ${toolErr.message}. Consider whether a different tool or different args would work, or explain this limitation in your final answer rather than inventing data.]`;
         }
         continue; // loop again so the model can use this data
       }
@@ -4246,17 +4270,32 @@ Critical rules:
           action: parsed.action,
           args: parsed.args || {},
           summary: parsed.summary || `Execute ${parsed.action}`,
+          thinking: parsed.thinking || '',
         };
         break;
       }
 
-      // type === 'answer' or anything else — treat as final
-      finalResult = { type: 'answer', text: parsed.text || raw.trim(), remember: parsed.remember || null };
+      // type === 'answer' — genuine self-check pass: if any tool
+      // calls were made, ask the model to verify its own draft
+      // answer against what was actually retrieved before it ships.
+      let finalText = parsed.text || raw.trim();
+      if (toolCallLog.length > 0) {
+        const verifyPrompt = `You drafted this answer: "${finalText}"\n\nHere is what you actually retrieved via tools during this conversation:\n${toolCallLog.map(t => `- ${t.tool}(${JSON.stringify(t.args)}) → ${t.resultSummary}`).join('\n')}\n\nCheck: does every specific number or fact in your draft answer genuinely trace back to this data? If the draft is accurate, respond with exactly the same text unchanged. If you spot something unsupported or wrong, respond with a corrected version. Respond with ONLY the final answer text, no JSON, no preamble.`;
+        try {
+          const verified = await callAI('You are fact-checking your own draft answer against retrieved data. Be strict — only pass through claims that are actually supported.', verifyPrompt, 500);
+          if (verified?.trim()) finalText = verified.trim();
+        } catch {
+          // If the verification call itself fails, ship the original
+          // draft rather than blocking the response entirely
+        }
+      }
+
+      finalResult = { type: 'answer', text: finalText, remember: parsed.remember || null, thinking: parsed.thinking || lastThinking };
       break;
     }
 
     if (!finalResult) {
-      finalResult = { type: 'answer', text: "I wasn't able to work through that in the allotted steps — try rephrasing or breaking it into a simpler question." };
+      finalResult = { type: 'answer', text: "This turned out to need more steps than I could work through in one go — try breaking it into a couple of smaller questions and I'll be able to go deeper on each." };
     }
 
     if (finalResult.type === 'action_proposal') {
@@ -4268,7 +4307,7 @@ Critical rules:
       return res.json({
         success: true,
         answer: finalResult.summary,
-        actionProposal: { action: finalResult.action, args: finalResult.args, summary: finalResult.summary },
+        actionProposal: { action: finalResult.action, args: finalResult.args, summary: finalResult.summary, thinking: finalResult.thinking || null },
       });
     }
 
@@ -4278,7 +4317,7 @@ Critical rules:
       await saveLearnedNote(finalResult.remember).catch(() => {});
     }
 
-    res.json({ success: true, answer: finalResult.text, remembered: !!finalResult.remember });
+    res.json({ success: true, answer: finalResult.text, thinking: finalResult.thinking || null, remembered: !!finalResult.remember });
   } catch (err) {
     res.status(err.isRateLimit ? 429 : 503).json({ success: false, error: err.message, isRateLimit: !!err.isRateLimit });
   }

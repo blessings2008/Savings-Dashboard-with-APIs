@@ -93,7 +93,16 @@ function renderShell(user) {
       </div>
 
       <div class="main" id="main-content">
-        <div class="loading-row"><span class="spinner"></span> Loading...</div>
+        <div class="page-skeleton">
+          <div class="skel-stat-grid">
+            <div class="skel skel-stat-box"></div>
+            <div class="skel skel-stat-box"></div>
+            <div class="skel skel-stat-box"></div>
+            <div class="skel skel-stat-box"></div>
+          </div>
+          <div class="skel skel-list-item"></div>
+          <div class="skel skel-list-item"></div>
+        </div>
       </div>
     </div>
 
@@ -134,7 +143,18 @@ async function navigate(page) {
   currentPage = page;
   setActiveNav(page);
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading...</div>`;
+  main.innerHTML = `
+    <div class="page-skeleton">
+      <div class="skel-stat-grid">
+        <div class="skel skel-stat-box"></div>
+        <div class="skel skel-stat-box"></div>
+        <div class="skel skel-stat-box"></div>
+        <div class="skel skel-stat-box"></div>
+      </div>
+      <div class="skel skel-list-item"></div>
+      <div class="skel skel-list-item"></div>
+      <div class="skel skel-list-item"></div>
+    </div>`;
 
   try {
     switch (page) {
@@ -207,10 +227,13 @@ async function loadUserProfile() {
 // DASHBOARD PAGE
 // ----------------------------
 async function renderDashboardPage(main) {
-  await loadPlan();
-  await loadUserProfile();
-
-  const [balanceRes, goalsRes, txRes] = await Promise.all([
+  // Previously loadPlan() and loadUserProfile() ran sequentially,
+  // each a separate round-trip, BEFORE the balance/goals/transactions
+  // fetch even started. Running everything in parallel is the real
+  // fix for the "keeps loading" feeling.
+  const [, , balanceRes, goalsRes, txRes] = await Promise.all([
+    loadPlan(),
+    loadUserProfile(),
     api.balance().catch(() => ({ balance: 0, mock: true })),
     api.goals(),
     api.transactions("?limit=5"),
