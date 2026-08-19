@@ -1,0 +1,4 @@
+/* PocketVault — responsive module */
+@media (max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:768px){.sidebar{display:none}.main{padding:18px 14px;padding-bottom:90px}.bottom-nav{display:flex}.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3,.grid-2{grid-template-columns:1fr}.balance-amount{font-size:30px}.page-header h2{font-size:20px}.page.active,.page-skeleton{max-width:none}}
+@media (max-width:420px){.grid-4{grid-template-columns:repeat(2,1fr);gap:10px}.stat{padding:14px}.balance-hero{padding:20px}}
