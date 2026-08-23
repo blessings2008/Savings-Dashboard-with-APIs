@@ -31,15 +31,28 @@ export async function reconcilePendingTransactions() {
   if (isMockMode()) return;
   try {
     console.log('🔄 Reconciliation running...');
-    const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
-    const pendingSnap = await db.collection('transactions')
+    const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).getTime();
+    // Single equality filter only, then filter by timestamp in
+    // application code — a compound where() (status == AND
+    // timestamp <=) requires a Firestore composite index, which the
+    // rest of this file deliberately avoids (see toMillis() and the
+    // note on sweepUnresolvedFunds() below). The limit is applied
+    // AFTER the timestamp filter, not on the raw query — applying it
+    // before would risk truncating to 50 pending transactions that
+    // happen to all be too recent, silently skipping older ones that
+    // are actually due for reconciliation.
+    const pendingRawSnap = await db.collection('transactions')
       .where('status', '==', 'pending')
-      .where('timestamp', '<=', twoMinsAgo)
-      .limit(50).get();
+      .limit(500) // generous cap on how many "pending" docs we'll ever scan per run
+      .get();
 
-    if (pendingSnap.empty) { console.log('✅ No pending transactions'); return; }
+    const pendingDocs = pendingRawSnap.docs
+      .filter(doc => toMillis(doc.data().timestamp) <= twoMinsAgo)
+      .slice(0, 50);
 
-    for (const doc of pendingSnap.docs) {
+    if (pendingDocs.length === 0) { console.log('✅ No pending transactions'); return; }
+
+    for (const doc of pendingDocs) {
       const tx = doc.data();
       try {
         const result = await airtelTransactionStatus(tx.reference);
@@ -153,12 +166,18 @@ export async function monitorFloat() {
 export async function checkExpiredSubscriptions() {
   try {
     console.log('🔄 Checking expired subscriptions...');
-    const snap = await db.collection('users')
+    // Single equality filter, then filter by subscriptionExpiry in
+    // application code — same reasoning as reconcilePendingTransactions()
+    // above and sweepUnresolvedFunds() below: avoids requiring a
+    // Firestore composite index for a mixed equality+range query.
+    const rawSnap = await db.collection('users')
       .where('subscriptionActive', '==', true)
-      .where('subscriptionExpiry', '<=', Date.now())
       .get();
 
-    for (const doc of snap.docs) {
+    const now = Date.now();
+    const expiredDocs = rawSnap.docs.filter(doc => (doc.data().subscriptionExpiry || 0) <= now);
+
+    for (const doc of expiredDocs) {
       const user = doc.data();
       if (user.plan === 'free') continue;
       await db.collection('users').doc(doc.id).set({
@@ -208,14 +227,23 @@ export async function checkExpiredSubscriptions() {
 export async function sweepUnresolvedFunds() {
   try {
     console.log('🔄 Checking for unresolved funds from deleted accounts...');
+    // Single equality filter only, then filter by purgeDeadline in
+    // application code — a compound where() (accountDeleted ==
+    // AND purgeDeadline <=) requires a Firestore composite index,
+    // which every other job in this file deliberately avoids (see
+    // toMillis() and the comment on GET /api/transactions). Deleted
+    // accounts are not a high-volume collection, so fetching all of
+    // them and filtering here is cheap and needs zero index
+    // maintenance.
     const snap = await db.collection('users')
       .where('accountDeleted', '==', true)
-      .where('purgeDeadline', '<=', Date.now())
       .get();
 
+    const now = Date.now();
     let sweptCount = 0, sweptTotal = 0;
     for (const doc of snap.docs) {
       const user = doc.data();
+      if (!user.purgeDeadline || user.purgeDeadline > now) continue; // not yet past the 60-day mark
       if (user.unresolvedFundsSwept) continue; // already processed by a previous run
       const balance = user.accountBalance || 0;
 
