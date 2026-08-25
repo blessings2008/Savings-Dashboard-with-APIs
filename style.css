@@ -1,0 +1,15 @@
+/* PocketVault stylesheet entrypoint.
+   Feature styles are now split into modules. Keep this file as the single
+   stylesheet referenced by the existing HTML so no markup changes are needed. */
+@import url('./css/base.css');
+@import url('./css/auth.css');
+@import url('./css/layout.css');
+@import url('./css/dashboard.css');
+@import url('./css/goals.css');
+@import url('./css/transactions.css');
+@import url('./css/rules.css');
+@import url('./css/notifications.css');
+@import url('./css/analytics.css');
+@import url('./css/components.css');
+@import url('./css/animations.css');
+@import url('./css/responsive.css');
