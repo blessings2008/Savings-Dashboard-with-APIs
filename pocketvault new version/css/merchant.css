@@ -1,0 +1,62 @@
+/* PocketVault merchant dashboard styles.
+   The merchant page previously reused dashboard/goals classes almost
+   entirely; this file covers the pieces genuinely new to the
+   redesigned Overview/Transactions/Account structure — the in-page
+   tab bar and the transactions data table, which didn't exist
+   anywhere in the user-facing app before (only the admin panel had
+   a real table). Reuses the app's existing --surface/--border/--muted
+   custom properties rather than introducing new ones. */
+
+.merchant-tabs { -webkit-overflow-scrolling: touch; overflow-x: auto; }
+.merchant-tab-btn { transition: color .15s ease, border-color .15s ease; }
+.merchant-tab-btn:hover { color: var(--text); }
+
+.merchant-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 14px);
+  padding: 14px 10px;
+  text-align: center;
+}
+.merchant-stat .val {
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+.merchant-stat .lbl {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-top: 4px;
+}
+
+/* Transactions table — new to the user-facing app; mirrors the
+   admin panel's table styling (same underlying CSS variables) so it
+   doesn't look like a foreign component dropped into the user app. */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap table { width: 100%; border-collapse: collapse; }
+.table-wrap thead th {
+  text-align: left;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.table-wrap tbody td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.table-wrap tbody tr:last-child td { border-bottom: none; }
+.table-wrap .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-wrap .mono { font-family: monospace; font-size: 12px; }
