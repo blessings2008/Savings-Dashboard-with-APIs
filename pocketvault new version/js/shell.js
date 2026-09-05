@@ -6,14 +6,6 @@ import { api } from "../api.js";
 import { NAV, sectionsOrder, sectionLabels } from "./core/navigation.js";
 import { initials } from "./core/utils.js";
 
-// ----------------------------
-// UNREAD NOTIFICATION BADGE
-// Was previously called from renderShell() and the KYC success flow
-// but never actually defined — a silent dead reference that threw
-// in the console on every page load without visibly breaking
-// anything (both call sites don't await it). Fixed here properly:
-// updates the small badge dot on the Alerts nav item.
-// ----------------------------
 export async function fetchUnreadCount() {
   try {
     const res = await api.unreadCount();
@@ -34,8 +26,7 @@ export async function fetchUnreadCount() {
       }
     });
   } catch {
-    // Silent — this is a background badge update, not worth
-    // surfacing an error for a failed poll
+    // Background badge update; do not interrupt the app when it fails.
   }
 }
 
@@ -50,6 +41,14 @@ export function renderShell(user, navigate) {
         </div>`;
     }
   }
+
+  const moreItems = NAV.map(item => `
+    <button class="mobile-more-item" type="button" data-more-page="${item.id}">
+      <span class="mobile-more-icon">${item.icon}</span>
+      <span class="mobile-more-label">${item.label}</span>
+      <span class="mobile-more-arrow">›</span>
+    </button>
+  `).join("");
 
   document.getElementById("app").innerHTML = `
     <div class="shell">
@@ -81,26 +80,75 @@ export function renderShell(user, navigate) {
     </div>
 
     <div class="bottom-nav">
-      <div class="nav-item" data-page="dashboard"><span class="nav-icon">⬡</span>Home</div>
-      <div class="nav-item" data-page="goals"><span class="nav-icon">◎</span>Goals</div>
-      <div class="nav-item" data-page="transactions"><span class="nav-icon">≡</span>Activity</div>
-      <div class="nav-item" data-page="notifications"><span class="nav-icon notif-nav-icon">◉</span>Alerts</div>
-      <div class="nav-item" data-page="account"><span class="nav-icon">${initials(user)}</span>Account</div>
+      <div class="nav-item" data-page="dashboard"><span class="nav-icon">⬡</span><span>Home</span></div>
+      <div class="nav-item" data-page="goals"><span class="nav-icon">◎</span><span>Goals</span></div>
+      <div class="nav-item" data-page="transactions"><span class="nav-icon">≡</span><span>Activity</span></div>
+      <div class="nav-item" data-page="notifications"><span class="nav-icon notif-nav-icon">◉</span><span>Alerts</span></div>
+      <div class="nav-item mobile-more-trigger" id="mobile-more-trigger" role="button" tabindex="0" aria-label="More PocketVault features" aria-expanded="false">
+        <span class="nav-icon">•••</span><span>More</span>
+      </div>
+    </div>
+
+    <div class="mobile-more-overlay" id="mobile-more-overlay" aria-hidden="true">
+      <div class="mobile-more-backdrop" id="mobile-more-backdrop"></div>
+      <section class="mobile-more-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-more-title">
+        <div class="mobile-more-handle"></div>
+        <div class="mobile-more-header">
+          <div>
+            <h2 id="mobile-more-title">PocketVault</h2>
+            <p>Everything in one place</p>
+          </div>
+          <button class="mobile-more-close" id="mobile-more-close" type="button" aria-label="Close menu">×</button>
+        </div>
+        <div class="mobile-more-list">${moreItems}
+          <button class="mobile-more-item" type="button" data-more-page="account">
+            <span class="mobile-more-icon">${initials(user)}</span>
+            <span class="mobile-more-label">Account & Settings</span>
+            <span class="mobile-more-arrow">›</span>
+          </button>
+        </div>
+      </section>
     </div>
 
     <!-- MODALS -->
     <div class="modal-overlay" id="modal-root"></div>
   `;
 
-  // Nav click handlers
+  const closeMore = () => {
+    const overlay = document.getElementById("mobile-more-overlay");
+    const trigger = document.getElementById("mobile-more-trigger");
+    if (!overlay) return;
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+    trigger?.setAttribute("aria-expanded", "false");
+  };
+
+  const openMore = () => {
+    const overlay = document.getElementById("mobile-more-overlay");
+    const trigger = document.getElementById("mobile-more-trigger");
+    if (!overlay) return;
+    overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden", "false");
+    trigger?.setAttribute("aria-expanded", "true");
+  };
+
   document.querySelectorAll("[data-page]").forEach(el => {
-    el.addEventListener("click", () => navigate(el.dataset.page));
+    el.addEventListener("click", () => { closeMore(); navigate(el.dataset.page); });
   });
 
-  // User pill -> account page
-  document.getElementById("user-pill").addEventListener("click", () => navigate("account"));
+  document.querySelectorAll("[data-more-page]").forEach(el => {
+    el.addEventListener("click", () => { closeMore(); navigate(el.dataset.morePage); });
+  });
 
-  // Start polling unread notification count
+  document.getElementById("user-pill").addEventListener("click", () => navigate("account"));
+  document.getElementById("mobile-more-trigger")?.addEventListener("click", openMore);
+  document.getElementById("mobile-more-trigger")?.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMore(); }
+  });
+  document.getElementById("mobile-more-close")?.addEventListener("click", closeMore);
+  document.getElementById("mobile-more-backdrop")?.addEventListener("click", closeMore);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMore(); }, { once: true });
+
   fetchUnreadCount();
   setInterval(fetchUnreadCount, 30000);
 }
