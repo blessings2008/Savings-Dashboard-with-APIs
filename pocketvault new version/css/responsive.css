@@ -1,4 +1,156 @@
-/* PocketVault — responsive module */
-@media (max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:768px){.sidebar{display:none}.main{padding:18px 14px;padding-bottom:90px}.bottom-nav{display:flex}.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3,.grid-2{grid-template-columns:1fr}.balance-amount{font-size:30px}.page-header h2{font-size:20px}.page.active,.page-skeleton{max-width:none}}
-@media (max-width:420px){.grid-4{grid-template-columns:repeat(2,1fr);gap:10px}.stat{padding:14px}.balance-hero{padding:20px}}
+/* PocketVault — responsive/mobile UX module
+   Mobile is a primary surface, not a reduced desktop layout. */
+html,body{max-width:100%;overflow-x:hidden}
+*,*::before,*::after{box-sizing:border-box}
+img,svg,video,canvas{max-width:100%;height:auto}
+button,.btn,input,select,textarea{max-width:100%;font:inherit}
+
+@media (max-width:900px){
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .main{padding-left:18px;padding-right:18px}
+}
+
+@media (max-width:768px){
+  :root{--mobile-gutter:14px}
+  .sidebar{display:none}
+  .main{width:100%;min-width:0;padding:16px var(--mobile-gutter) calc(88px + env(safe-area-inset-bottom));align-items:stretch}
+  .page.active,.page-skeleton{width:100%;max-width:none;min-width:0}
+
+  .page-header{margin-bottom:18px}
+  .page-header h2{font-size:21px;line-height:1.2}
+  .page-header p{font-size:13px;line-height:1.5}
+  .dash-greeting{gap:12px;align-items:flex-start}
+  .dash-greeting-name{font-size:20px}
+
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
+  .grid-3,.grid-2{grid-template-columns:1fr;gap:10px;margin-bottom:14px}
+  .stat{min-width:0;padding:14px;border-radius:14px}
+  .stat-label{font-size:10px;white-space:normal}
+  .stat-value{font-size:19px;overflow-wrap:anywhere}
+  .stat-sub{font-size:11px;overflow-wrap:anywhere}
+
+  .card{padding:16px;border-radius:16px;margin-bottom:10px;min-width:0}
+  .card-header{gap:10px;align-items:flex-start}
+  .card-title{font-size:14px}
+  .balance-hero{padding:20px;border-radius:20px;margin-bottom:14px}
+  .balance-amount{font-size:clamp(27px,8vw,34px);overflow-wrap:anywhere}
+  .balance-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .balance-actions .btn{width:100%;min-width:0}
+  .balance-icon-actions{gap:6px}
+  .bal-icon-btn{min-height:58px;padding:9px 3px}
+  .bal-icon-btn-label{font-size:9px}
+
+  .quick-action-section{margin:14px 0 2px}
+  .quick-action-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .quick-action-icon{width:100%;height:48px;border-radius:14px;font-size:19px}
+  .quick-action-text{font-size:9.5px}
+
+  .bottom-nav{display:flex;padding:8px 5px calc(8px + env(safe-area-inset-bottom));min-height:64px}
+  .bottom-nav .nav-item{min-width:54px;min-height:48px;justify-content:center;gap:2px;padding:5px 6px}
+  .bottom-nav .nav-icon{font-size:18px}
+  .bottom-nav .nav-item.active:before{left:24%;right:24%}
+
+  .section-row{gap:10px;margin:16px 0 9px}
+  .section-row-title{font-size:14px}
+  .section-row-action{font-size:11px;white-space:nowrap}
+  .goals-pill-scroll{margin-right:-2px;padding-bottom:7px;gap:9px}
+  .goal-pill{width:150px;padding:13px;border-radius:16px}
+  .goal-card{padding:15px;border-radius:16px}
+
+  .tx-row{gap:8px;padding:11px 0}
+  .tx-left{gap:9px;min-width:0;flex:1}
+  .tx-icon{width:34px;height:34px;border-radius:9px}
+  .tx-name{font-size:13px}
+  .tx-date{font-size:11px}
+  .tx-amount{font-size:13px}
+  .tx-status{font-size:10px}
+
+  .table-wrap{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+  .table-wrap table{min-width:620px}
+  .table-wrap thead th,.table-wrap tbody td{padding:10px 9px}
+
+  .input-group{margin-bottom:12px}
+  .input-label{font-size:10.5px}
+  .input,select.input,textarea.input{font-size:16px;padding:12px 13px;min-height:46px}
+  .btn{min-height:44px;padding:11px 16px}
+  .btn-sm{min-height:38px;padding:8px 12px}
+
+  .modal-overlay{align-items:flex-end;padding:8px}
+  .modal{width:100%;max-width:520px;max-height:calc(100dvh - 16px);overflow:auto;border-radius:22px;padding:20px 17px calc(18px + env(safe-area-inset-bottom))}
+  .modal-actions{position:sticky;bottom:0;background:var(--surface);padding-top:10px;gap:8px}
+  .modal-actions .btn{min-height:46px}
+
+  .toast{bottom:calc(76px + env(safe-area-inset-bottom));max-width:calc(100vw - 24px);width:max-content;padding:12px 15px;font-size:12.5px}
+
+  .chart-bar-wrap{height:72px;gap:4px}
+  .chart-labels{gap:4px;font-size:9px}
+  .insight-box{padding:13px;font-size:12.5px;line-height:1.6}
+  .merchant-stat{padding:13px 8px}
+  .merchant-stat .val{font-size:17px;overflow-wrap:anywhere}
+
+  .merchant-tabs{overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  .merchant-tabs::-webkit-scrollbar{display:none}
+  .merchant-tab-btn{flex:0 0 auto}
+
+  .ai-page{width:100%;padding:2px 0 24px}
+  .ai-header{display:block;margin-bottom:16px}
+  .ai-header h1{font-size:clamp(25px,8vw,32px);line-height:1.1}
+  .ai-header p{font-size:13px;line-height:1.55}
+  .ai-usage-card{width:100%;min-width:0;margin-top:14px}
+  .ai-layout{grid-template-columns:1fr;gap:10px}
+  .ai-side-card{display:none}
+  .ai-chat-card{min-height:calc(100dvh - 300px);padding:13px;border-radius:17px}
+  .ai-chat{min-height:250px;max-height:none;padding:2px}
+  .ai-message{max-width:94%}
+  .ai-message-body{font-size:13px;padding:11px 12px}
+  .ai-prompts{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px;margin:10px 0;scrollbar-width:none}
+  .ai-prompts::-webkit-scrollbar{display:none}
+  .ai-prompts button{white-space:nowrap;min-height:40px;padding:8px 11px}
+  .ai-composer{position:sticky;bottom:0;background:var(--surface);padding-top:7px}
+  .ai-composer input{min-width:0;font-size:16px;min-height:46px}
+  .ai-composer .btn{min-width:76px}
+  .ai-insight{min-width:0;overflow-wrap:anywhere}
+
+  .referral-code-box{flex-wrap:wrap;padding:11px 13px}
+  .referral-code-text{font-size:18px;letter-spacing:2px;overflow-wrap:anywhere}
+  .referral-stats-row{gap:6px}
+  .referral-stat{min-width:0;padding:9px 6px}
+  .referral-stat-value{font-size:15px}
+  .referral-apply-row{flex-direction:column}
+  .referral-apply-row .btn{width:100%}
+
+  .empty-state{padding:32px 14px}
+  .modal-info,.deadline-decision-banner,.behavior-option{overflow-wrap:anywhere}
+}
+
+@media (max-width:420px){
+  .main{padding-left:11px;padding-right:11px}
+  .grid-4{gap:7px}
+  .stat{padding:12px 10px}
+  .stat-value{font-size:17px}
+  .balance-hero{padding:18px;border-radius:18px}
+  .balance-amount{font-size:27px}
+  .balance-actions{grid-template-columns:1fr 1fr}
+  .quick-action-grid{gap:5px}
+  .quick-action-icon{height:44px;border-radius:12px}
+  .quick-action-text{font-size:9px}
+  .card{padding:14px}
+  .page-header h2{font-size:20px}
+  .bottom-nav .nav-item{min-width:48px;padding-left:3px;padding-right:3px;font-size:9px}
+  .bottom-nav .nav-item .nav-icon{font-size:17px}
+  .tx-row{gap:6px}
+  .tx-icon{width:32px;height:32px;font-size:14px}
+  .tx-amount{font-size:12px}
+  .modal{padding-left:14px;padding-right:14px}
+  .ai-chat-card{padding:10px}
+  .ai-message{max-width:96%}
+  .ai-composer .btn{min-width:68px;padding-left:10px;padding-right:10px}
+}
+
+@media (max-width:340px){
+  .grid-4{grid-template-columns:1fr 1fr}
+  .quick-action-text{font-size:8.5px}
+  .balance-actions{grid-template-columns:1fr}
+  .bottom-nav .nav-item{min-width:43px}
+}
