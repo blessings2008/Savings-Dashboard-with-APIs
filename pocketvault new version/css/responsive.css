@@ -13,6 +13,7 @@ button,.btn,input,select,textarea{max-width:100%;font:inherit}
 
 @media (max-width:768px){
   :root{--mobile-gutter:14px}
+  body.mobile-more-open{overflow:hidden}
   .sidebar{display:none}
   .main{width:100%;min-width:0;padding:16px var(--mobile-gutter) calc(88px + env(safe-area-inset-bottom));align-items:stretch}
   .page.active,.page-skeleton{width:100%;max-width:none;min-width:0}
@@ -52,6 +53,7 @@ button,.btn,input,select,textarea{max-width:100%;font:inherit}
   .bottom-nav .nav-item.active:before{left:24%;right:24%}
   .bottom-nav .mobile-more-trigger{cursor:pointer;user-select:none}
   .bottom-nav .mobile-more-trigger .nav-icon{letter-spacing:1px;font-weight:800}
+  .bottom-nav .mobile-more-trigger.active{font-weight:700}
 
   /* Mobile feature discovery: secondary pages live in a bottom sheet instead of
      being hidden behind desktop-only sidebar navigation. */
@@ -64,8 +66,11 @@ button,.btn,input,select,textarea{max-width:100%;font:inherit}
   .mobile-more-header h2{margin:0;font-size:19px}
   .mobile-more-header p{margin:3px 0 0;color:var(--text-muted);font-size:12px}
   .mobile-more-close{width:40px;height:40px;border:0;border-radius:12px;background:var(--surface-2);color:var(--text);font-size:25px;line-height:1;cursor:pointer}
+  .mobile-more-sections{display:grid;gap:13px}
+  .mobile-more-section-label{padding:0 3px;margin-top:1px;color:var(--text-muted);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
   .mobile-more-list{display:grid;gap:7px}
-  .mobile-more-item{display:grid;grid-template-columns:40px minmax(0,1fr) 20px;align-items:center;gap:10px;width:100%;min-height:54px;padding:7px 10px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);text-align:left;cursor:pointer}
+  .mobile-more-item{display:grid;grid-template-columns:40px minmax(0,1fr) 20px;align-items:center;gap:10px;width:100%;min-height:54px;padding:7px 10px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);text-align:left;cursor:pointer;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+  .mobile-more-item:hover{border-color:color-mix(in srgb,var(--border) 60%,var(--text-muted));background:var(--surface)}
   .mobile-more-item:active{transform:scale(.99)}
   .mobile-more-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:var(--surface);font-size:17px;font-weight:700}
   .mobile-more-label{font-size:13px;font-weight:600;min-width:0;overflow-wrap:anywhere}
