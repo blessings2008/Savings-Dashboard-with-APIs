@@ -21,6 +21,7 @@ import { log, logSystemError, sendExternalAlert, fetchWithRetry } from './helper
 
 import userRoutes from './routes/user.js';
 import userAIRoutes from './routes/user-ai.js';
+import userAIInsightRoutes from './routes/user-ai-insights.js';
 import adminRoutes, { resolveAIProvider } from './routes/admin.js';
 
 import {
@@ -79,6 +80,7 @@ app.use('/api/kyc', rateLimit(5, 60 * 1000));
 
 app.use('/', userRoutes);
 app.use('/', userAIRoutes);
+app.use('/', userAIInsightRoutes);
 app.use('/', adminRoutes);
 
 app.use('/admin', express.static(join(__dirname, 'admin')));
