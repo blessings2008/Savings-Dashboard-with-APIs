@@ -38,17 +38,24 @@ export function renderShell(user, navigate) {
       sidebarHTML += `
         <div class="nav-item" data-page="${item.id}">
           <span class="nav-icon">${item.icon}</span> ${item.label}
-        </div>`;
+        </div>
+      `;
     }
   }
 
-  const moreItems = NAV.map(item => `
-    <button class="mobile-more-item" type="button" data-more-page="${item.id}">
-      <span class="mobile-more-icon">${item.icon}</span>
-      <span class="mobile-more-label">${item.label}</span>
-      <span class="mobile-more-arrow">›</span>
-    </button>
-  `).join("");
+  const moreSectionsHTML = sectionsOrder.map(sec => {
+    const items = NAV.filter(item => item.section === sec).map(item => `
+      <button class="mobile-more-item" type="button" data-more-page="${item.id}">
+        <span class="mobile-more-icon">${item.icon}</span>
+        <span class="mobile-more-label">${item.label}</span>
+        <span class="mobile-more-arrow">›</span>
+      </button>
+    `).join("");
+    return `
+      <div class="mobile-more-section-label">${sectionLabels[sec]}</div>
+      <div class="mobile-more-list">${items}</div>
+    `;
+  }).join("");
 
   document.getElementById("app").innerHTML = `
     <div class="shell">
@@ -100,12 +107,16 @@ export function renderShell(user, navigate) {
           </div>
           <button class="mobile-more-close" id="mobile-more-close" type="button" aria-label="Close menu">×</button>
         </div>
-        <div class="mobile-more-list">${moreItems}
-          <button class="mobile-more-item" type="button" data-more-page="account">
-            <span class="mobile-more-icon">${initials(user)}</span>
-            <span class="mobile-more-label">Account & Settings</span>
-            <span class="mobile-more-arrow">›</span>
-          </button>
+        <div class="mobile-more-sections">
+          ${moreSectionsHTML}
+          <div class="mobile-more-section-label">Account</div>
+          <div class="mobile-more-list">
+            <button class="mobile-more-item" type="button" data-more-page="account">
+              <span class="mobile-more-icon">${initials(user)}</span>
+              <span class="mobile-more-label">Account & Settings</span>
+              <span class="mobile-more-arrow">›</span>
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -114,23 +125,19 @@ export function renderShell(user, navigate) {
     <div class="modal-overlay" id="modal-root"></div>
   `;
 
-  const closeMore = () => {
+  const setMoreState = (open) => {
     const overlay = document.getElementById("mobile-more-overlay");
     const trigger = document.getElementById("mobile-more-trigger");
     if (!overlay) return;
-    overlay.classList.remove("open");
-    overlay.setAttribute("aria-hidden", "true");
-    trigger?.setAttribute("aria-expanded", "false");
+    overlay.classList.toggle("open", open);
+    overlay.setAttribute("aria-hidden", String(!open));
+    trigger?.setAttribute("aria-expanded", String(open));
+    trigger?.classList.toggle("active", open);
+    document.body.classList.toggle("mobile-more-open", open);
   };
 
-  const openMore = () => {
-    const overlay = document.getElementById("mobile-more-overlay");
-    const trigger = document.getElementById("mobile-more-trigger");
-    if (!overlay) return;
-    overlay.classList.add("open");
-    overlay.setAttribute("aria-hidden", "false");
-    trigger?.setAttribute("aria-expanded", "true");
-  };
+  const closeMore = () => setMoreState(false);
+  const openMore = () => setMoreState(true);
 
   document.querySelectorAll("[data-page]").forEach(el => {
     el.addEventListener("click", () => { closeMore(); navigate(el.dataset.page); });
@@ -140,14 +147,14 @@ export function renderShell(user, navigate) {
     el.addEventListener("click", () => { closeMore(); navigate(el.dataset.morePage); });
   });
 
-  document.getElementById("user-pill").addEventListener("click", () => navigate("account"));
+  document.getElementById("user-pill")?.addEventListener("click", () => navigate("account"));
   document.getElementById("mobile-more-trigger")?.addEventListener("click", openMore);
   document.getElementById("mobile-more-trigger")?.addEventListener("keydown", e => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMore(); }
   });
   document.getElementById("mobile-more-close")?.addEventListener("click", closeMore);
   document.getElementById("mobile-more-backdrop")?.addEventListener("click", closeMore);
-  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMore(); }, { once: true });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMore(); });
 
   fetchUnreadCount();
   setInterval(fetchUnreadCount, 30000);
