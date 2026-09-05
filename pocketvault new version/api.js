@@ -73,5 +73,6 @@ export const api = {
   getSupportThread: (threadId) => request("GET", `/api/support/threads/${threadId}`),
   replySupportThread: (threadId, message) => request("POST", `/api/support/threads/${threadId}/messages`, { message }),
   aiStatus: () => request("GET", "/api/ai/status"),
+  aiInsights: () => request("GET", "/api/ai/insights"),
   aiChat: (message) => request("POST", "/api/ai/chat", { message })
 };
