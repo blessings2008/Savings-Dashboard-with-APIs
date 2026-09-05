@@ -3,6 +3,7 @@
 // own account context, and the endpoint is read-only in this first phase.
 import express from 'express';
 import { requireAuth, asyncHandler, getUserPlan, rateLimit } from '../core/middleware.js';
+import { db } from '../core/firebase.js';
 import {
   buildUserContext,
   callUserAI,
@@ -17,11 +18,17 @@ const router = express.Router();
 router.get('/api/ai/status', requireAuth, asyncHandler(async (req, res) => {
   const plan = await getUserPlan(req.user.uid);
   const limits = getUserAILimits(plan);
+  const day = new Date().toISOString().slice(0, 10);
+  const usageSnap = await db.collection('ai_usage').doc(`${req.user.uid}_${day}`).get();
+  const used = usageSnap.exists ? Number(usageSnap.data()?.count || 0) : 0;
+  const safeUsed = Math.min(used, limits.dailyMessages);
   res.json({
     success: true,
     configured: !!resolveUserAIProvider(),
     plan,
     dailyMessageLimit: limits.dailyMessages,
+    used: safeUsed,
+    remaining: Math.max(0, limits.dailyMessages - safeUsed),
     historyDays: limits.historyDays,
     insights: limits.insights,
     actions: false,
