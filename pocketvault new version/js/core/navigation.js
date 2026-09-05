@@ -5,6 +5,7 @@ export const NAV = [
   { id: "autosave", icon: "↻", label: "Auto-Save", section: "main" },
   { id: "transactions", icon: "≡", label: "Transactions", section: "main" },
   { id: "analytics", icon: "◈", label: "Analytics", section: "insights" },
+  { id: "ai", icon: "✦", label: "PocketVault AI", section: "insights" },
   { id: "notifications", icon: "◉", label: "Notifications", section: "insights" },
   { id: "merchant", icon: "◇", label: "Merchant", section: "business" },
   { id: "premium", icon: "✦", label: "Plans", section: "business" },
@@ -12,20 +13,12 @@ export const NAV = [
 ];
 
 export const sectionsOrder = ["main", "insights", "business"];
-export const sectionLabels = {
-  main: "Main",
-  insights: "Insights",
-  business: "Business",
-};
+export const sectionLabels = { main: "Main", insights: "Insights", business: "Business" };
 
 export function setActiveNav(page, root = document) {
-  root.querySelectorAll("[data-page]").forEach(el => {
-    el.classList.toggle("active", el.dataset.page === page);
-  });
+  root.querySelectorAll("[data-page]").forEach(el => el.classList.toggle("active", el.dataset.page === page));
 }
 
 export function bindNavigation(navigate, root = document) {
-  root.querySelectorAll("[data-page]").forEach(el => {
-    el.addEventListener("click", () => navigate(el.dataset.page));
-  });
+  root.querySelectorAll("[data-page]").forEach(el => el.addEventListener("click", () => navigate(el.dataset.page)));
 }
