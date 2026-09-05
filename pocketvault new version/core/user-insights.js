@@ -34,7 +34,7 @@ export async function buildUserInsights(uid, plan) {
     insights.push(insight('outflow-watch', 'Outgoing activity is higher', `Recent outgoing activity is ${money(outgoing)}, compared with ${money(incoming)} incoming. Keep an eye on withdrawals and payments so your balance does not get squeezed.`, 'warning'));
   }
 
-  if (savings.active === 0 && context.goals?.length === 0) {
+  if (savings.activeGoalCount === 0 && context.goals?.length === 0) {
     insights.push(insight('goal-opportunity', 'Give your savings a target', 'You do not have a savings goal yet. A specific target can make saving easier to track and gives PocketVault something concrete to measure.'));
   } else if (savings.activeGoalCount > 0 && savings.activeProgressPercent < 25) {
     insights.push(insight('goal-start', 'Your goals are still early', `${savings.activeGoalCount} active goal${savings.activeGoalCount === 1 ? '' : 's'} are at ${savings.activeProgressPercent}% combined progress. A small, repeatable contribution may be easier to maintain than waiting for a large amount.`, 'info'));
