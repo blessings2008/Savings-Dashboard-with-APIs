@@ -2,7 +2,7 @@
 // Resend credentials stay server-side; these routes never accept an API key.
 import express from 'express';
 import { db, adminAuth } from '../core/firebase.js';
-import { requireAuth, requireOwnData, asyncHandler, rateLimit } from '../core/middleware.js';
+import { requireAuth, asyncHandler, rateLimit } from '../core/middleware.js';
 import { sendEmail, isEmailConfigured } from '../services/email.js';
 
 const router = express.Router();
@@ -30,7 +30,6 @@ router.get('/api/email/status', requireAuth, (req, res) => {
 
 router.post('/api/email/welcome',
   requireAuth,
-  requireOwnData,
   rateLimit(2, 24 * 60 * 60 * 1000),
   asyncHandler(async (req, res) => {
     const uid = req.user.uid;
@@ -62,7 +61,6 @@ router.post('/api/email/welcome',
 
 router.post('/api/email/transaction',
   requireAuth,
-  requireOwnData,
   rateLimit(10, 60 * 60 * 1000),
   asyncHandler(async (req, res) => {
     const uid = req.user.uid;
