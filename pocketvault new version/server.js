@@ -14,10 +14,11 @@ import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import crypto from 'crypto';
 
-import { validateEnvironment } from './core/firebase.js';
+import { validateEnvironment, db, adminAuth } from './core/firebase.js';
 import { AIRTEL, PAYCHANGU, SECURITY, resolvePaymentProvider } from './core/config.js';
-import { sanitizeBody, rateLimit } from './core/middleware.js';
+import { sanitizeBody, rateLimit, requireAuth } from './core/middleware.js';
 import { log, logSystemError, sendExternalAlert, fetchWithRetry } from './helpers.js';
+import { sendEmail } from './services/email.js';
 
 import userRoutes from './routes/user.js';
 import userAIRoutes from './routes/user-ai.js';
@@ -78,6 +79,48 @@ app.use('/api/subscribe', rateLimit(5, 60 * 1000));
 app.use('/api/merchant/collect', rateLimit(20, 60 * 1000));
 app.use('/api/merchant/disburse', rateLimit(20, 60 * 1000));
 app.use('/api/kyc', rateLimit(5, 60 * 1000));
+
+// Send the welcome email automatically the first time the authenticated
+// client posts its profile. Email failures are deliberately non-fatal:
+// account creation must never fail because the mail provider is down.
+app.post('/api/profile', requireAuth, async (req, res, next) => {
+  const uid = req.user.uid;
+  try {
+    const snap = await db.collection('users').doc(uid).get();
+    const data = snap.data() || {};
+    if (!data.welcomeEmailSentAt) {
+      const user = await adminAuth.getUser(uid);
+      if (user.email) {
+        const name = data.name || user.displayName || req.body.name || 'there';
+        try {
+          const result = await sendEmail({
+            to: user.email,
+            subject: 'Welcome to PocketVault 🇲🇼',
+            idempotencyKey: `welcome-user/${uid}`,
+            text: `Hi ${name},\n\nWelcome to PocketVault. Your account is ready. Start building your savings goals and track your money smarter.\n\n— PocketVault`,
+            html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;line-height:1.6;color:#17202a"><h2>Welcome to PocketVault 🇲🇼</h2><p>Hi ${String(name).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]))},</p><p>Your PocketVault account is ready.</p><p>Start building savings goals, tracking your money and making progress toward what matters to you.</p><p>— PocketVault</p></div>`
+          });
+          await db.collection('users').doc(uid).set({
+            welcomeEmailSentAt: new Date().toISOString(),
+            welcomeEmailId: result?.id || null
+          }, { merge: true });
+        } catch (emailError) {
+          log.warn('Welcome email failed; continuing profile request', {
+            uid,
+            error: emailError.message,
+            code: emailError.code || null
+          });
+        }
+      }
+    }
+  } catch (error) {
+    log.warn('Welcome email preflight failed; continuing profile request', {
+      uid,
+      error: error.message
+    });
+  }
+  next();
+});
 
 app.use('/', userRoutes);
 app.use('/', userAIRoutes);
