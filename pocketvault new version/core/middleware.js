@@ -92,7 +92,7 @@ export async function getUserPlan(uid) {
   }, 60000);
 }
 
-export function getPlanConfig(uid) {
+export async function getPlanConfig(uid) {
   const plan = await getUserPlan(uid);
   return { plan, config: PLANS[plan] };
 }
