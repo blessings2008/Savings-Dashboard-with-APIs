@@ -4,11 +4,14 @@ import { db, adminAuth, FieldValue } from './firebase.js';
 import { PLANS } from './config.js';
 import { getCached, clearCache, rateLimitMap } from './state.js';
 
-export function asyncHandler(fn) { return (req, res, next) => { Promise.resolve(fn(req, res, next)).catch(next); }; }
+export function asyncHandler(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+}
 
 export function rateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
   return (req, res, next) => {
-    const key = req.ip || 'unknown'; const now = Date.now(); const record = rateLimitMap.get(key) || { count: 0, start: now };
+    const key = req.ip || 'unknown'; const now = Date.now();
+    const record = rateLimitMap.get(key) || { count: 0, start: now };
     if (now - record.start > windowMs) { record.count = 1; record.start = now; } else record.count++;
     rateLimitMap.set(key, record);
     if (record.count > maxRequests) return res.status(429).json({ success: false, error: 'Too many requests. Please slow down.' });
@@ -22,27 +25,18 @@ export async function requireAuth(req, res, next) {
     if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ success: false, error: 'Unauthorized' });
     const decoded = await adminAuth.verifyIdToken(authHeader.split('Bearer ')[1]);
     req.user = { uid: decoded.uid, email: decoded.email, emailVerified: decoded.email_verified };
-
-    // OTP bootstrap routes and profile setup are intentionally usable before
-    // verification. Every other authenticated API route is gated until the
-    // Firebase email_verified claim is true.
     const verificationBootstrap = req.path.startsWith('/api/auth/email-otp/') || req.path === '/api/profile';
-    if (!decoded.email_verified && !verificationBootstrap) {
-      return res.status(403).json({ success: false, error: 'Email verification required.', code: 'EMAIL_VERIFICATION_REQUIRED' });
-    }
+    if (!decoded.email_verified && !verificationBootstrap) return res.status(403).json({ success: false, error: 'Email verification required.', code: 'EMAIL_VERIFICATION_REQUIRED' });
 
     const userDoc = await getCached(`user_deletion_check_${decoded.uid}`, async () => {
       const snap = await db.collection('users').doc(decoded.uid).get();
       return snap.data() || null;
     }, 10000);
-
     if (userDoc?.accountDeleted) {
       if (userDoc?.autoRecoveryDeadline && Date.now() < userDoc.autoRecoveryDeadline) {
         await db.collection('users').doc(decoded.uid).set({ accountDeleted: false, suspended: false, deletedAt: null, deletedAtMillis: null, autoRecoveryDeadline: null, purgeDeadline: null, reactivatedAt: FieldValue.serverTimestamp() }, { merge: true });
         clearCache(`user_deletion_check_${decoded.uid}`);
-      } else {
-        return res.status(403).json({ success: false, error: 'This account has been closed. Contact support to restore it.', accountDeleted: true });
-      }
+      } else return res.status(403).json({ success: false, error: 'This account has been closed. Contact support to restore it.', accountDeleted: true });
     }
     next();
   } catch { return res.status(401).json({ success: false, error: 'Unauthorized - invalid token' }); }
@@ -71,5 +65,32 @@ export function requireAdmin(req, res, next) {
 
 export function sanitize(str) { if (typeof str !== 'string') return str; return str.replace(/[<>'"`;]/g, '').trim().slice(0, 500); }
 export function sanitizeBody(req, res, next) { if (req.body && typeof req.body === 'object') for (const key of Object.keys(req.body)) if (typeof req.body[key] === 'string') req.body[key] = sanitize(req.body[key]); next(); }
-export async function getUserPlan(uid) { return getCached(`plan_${uid}`, async () => { const snap = await db.collection('users').doc(uid).get(); const plan = snap.data()?.plan || 'free'; return PLANS[plan] ? plan : 'free'; }, 60000); }
-export async function getPlanConfig(uid) { const plan = await getUserPlan(uid); return { plan, config: PLANS[plan] }; }
+
+export async function getUserPlan(uid) {
+  return getCached(`plan_${uid}`, async () => {
+    const snap = await db.collection('users').doc(uid).get();
+    const plan = snap.data()?.plan || 'free';
+    return PLANS[plan] ? plan : 'free';
+  }, 60000);
+}
+
+export async function getPlanConfig(uid) {
+  const plan = await getUserPlan(uid);
+  return { plan, config: PLANS[plan] };
+}
+
+// Restrict routes to one or more subscription plans.
+export function requirePlan(...allowedPlans) {
+  return asyncHandler(async (req, res, next) => {
+    const plan = await getUserPlan(req.user.uid);
+    if (!allowedPlans.includes(plan)) {
+      return res.status(403).json({
+        success: false,
+        error: `This feature requires ${allowedPlans.join(' or ')} plan`,
+        currentPlan: plan,
+        upgrade: true
+      });
+    }
+    next();
+  });
+}
