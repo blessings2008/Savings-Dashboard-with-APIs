@@ -3,16 +3,14 @@
 import express from 'express';
 import { db, adminAuth } from '../core/firebase.js';
 import { requireAuth, asyncHandler, rateLimit } from '../core/middleware.js';
-import { sendEmail, isEmailConfigured } from '../services/email.js';
+import {
+  sendEmail,
+  getEmailStatus,
+  buildWelcomeEmail,
+  buildTransactionEmail
+} from '../services/email.js';
 
 const router = express.Router();
-
-const escapeHtml = value => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#039;');
 
 async function getUserEmail(uid) {
   const user = await adminAuth.getUser(uid);
@@ -25,7 +23,9 @@ async function getUserEmail(uid) {
 }
 
 router.get('/api/email/status', requireAuth, (req, res) => {
-  res.json({ success: true, configured: isEmailConfigured() });
+  const status = getEmailStatus();
+  // Safe operational metadata only — never expose the API key.
+  res.json({ success: true, ...status });
 });
 
 router.post('/api/email/welcome',
@@ -42,12 +42,12 @@ router.post('/api/email/welcome',
     }
 
     const name = data.name || user.displayName || 'there';
+    const template = buildWelcomeEmail(name);
     const result = await sendEmail({
       to: email,
       subject: 'Welcome to PocketVault 🇲🇼',
       idempotencyKey: `welcome-user/${uid}`,
-      text: `Hi ${name},\n\nWelcome to PocketVault. Your account is ready. Start building your savings goals and track your money smarter.\n\n— PocketVault`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;line-height:1.6;color:#17202a"><h2>Welcome to PocketVault 🇲🇼</h2><p>Hi ${escapeHtml(name)},</p><p>Your PocketVault account is ready.</p><p>Start building savings goals, tracking your money and making progress toward what matters to you.</p><p>— PocketVault</p></div>`
+      ...template
     });
 
     await db.collection('users').doc(uid).set({
@@ -74,23 +74,23 @@ router.post('/api/email/transaction',
     }
 
     const { email } = await getUserEmail(uid);
-    const label = {
-      savings: 'Savings',
-      withdrawal: 'Withdrawal',
-      subscription: 'Subscription',
-      merchant_payment: 'Merchant payment'
-    }[type];
+    const rawStatus = String(status).trim().slice(0, 40) || 'completed';
+    const rawReference = reference ? String(reference).trim().slice(0, 100) : 'N/A';
+    const template = buildTransactionEmail({
+      type,
+      amount: parsedAmount,
+      status: rawStatus,
+      reference: rawReference
+    });
 
-    const safeStatus = String(status).slice(0, 40);
-    const safeReference = reference ? String(reference).slice(0, 100) : 'N/A';
-    const formatted = `MWK ${parsedAmount.toLocaleString()}`;
-
+    // Include the request's stable transaction attributes so two different
+    // transactions cannot accidentally share one Resend idempotency key.
+    const idempotencyKey = `transaction/${uid}/${type}/${rawReference}/${parsedAmount}/${rawStatus}`.slice(0, 256);
     const result = await sendEmail({
       to: email,
-      subject: `${label} ${safeStatus} — PocketVault`,
-      idempotencyKey: `transaction/${uid}/${safeReference}/${type}`,
-      text: `${label} ${safeStatus}.\nAmount: ${formatted}\nReference: ${safeReference}\n\n— PocketVault`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;line-height:1.6;color:#17202a"><h2>${escapeHtml(label)} ${escapeHtml(safeStatus)}</h2><p><strong>Amount:</strong> ${escapeHtml(formatted)}</p><p><strong>Reference:</strong> ${escapeHtml(safeReference)}</p><p>— PocketVault</p></div>`
+      subject: `${type.replace('_', ' ')} ${rawStatus} — PocketVault`,
+      idempotencyKey,
+      ...template
     });
 
     res.json({ success: true, sent: true, id: result?.id || null });
