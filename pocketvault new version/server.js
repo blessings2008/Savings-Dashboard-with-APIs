@@ -23,6 +23,7 @@ import userRoutes from './routes/user.js';
 import userAIRoutes from './routes/user-ai.js';
 import userAIInsightRoutes from './routes/user-ai-insights.js';
 import adminRoutes, { resolveAIProvider } from './routes/admin.js';
+import emailRoutes from './routes/email.js';
 
 import {
   reconcilePendingTransactions, monitorFloat, checkExpiredSubscriptions,
@@ -82,6 +83,7 @@ app.use('/', userRoutes);
 app.use('/', userAIRoutes);
 app.use('/', userAIInsightRoutes);
 app.use('/', adminRoutes);
+app.use('/', emailRoutes);
 
 app.use('/admin', express.static(join(__dirname, 'admin')));
 
