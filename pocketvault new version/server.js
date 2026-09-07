@@ -98,6 +98,10 @@ app.post('/api/profile', requireAuth, async (req, res, next) => {
             to: user.email,
             subject: 'Welcome to PocketVault 🇲🇼',
             idempotencyKey: `welcome-user/${uid}`,
+            tags: [
+              { name: 'category', value: 'welcome' },
+              { name: 'product', value: 'pocketvault' }
+            ],
             ...template
           });
           await db.collection('users').doc(uid).set({
