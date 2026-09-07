@@ -13,66 +13,39 @@ async function authHeader() {
 async function fetchWithTimeout(url, options, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (err) {
-    if (err.name === "AbortError") throw new Error("This is taking longer than expected. Check your connection and try again.");
-    throw err;
-  } finally { clearTimeout(timer); }
+  try { return await fetch(url, { ...options, signal: controller.signal }); }
+  catch (err) { if (err.name === "AbortError") throw new Error("This is taking longer than expected. Check your connection and try again."); throw err; }
+  finally { clearTimeout(timer); }
 }
 
 async function request(method, path, body) {
   const headers = await authHeader();
   const res = await fetchWithTimeout(BASE_URL + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.error || `Request failed (${res.status})`);
-    err.data = data; err.status = res.status; throw err;
-  }
+  if (!res.ok) { const err = new Error(data.error || `Request failed (${res.status})`); err.data = data; err.status = res.status; throw err; }
   return data;
 }
 
+export async function downloadAuthenticatedPdf(path, filename) {
+  const headers = await authHeader();
+  const res = await fetchWithTimeout(BASE_URL + path, { method: "GET", headers });
+  if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Report download failed (${res.status})`); }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const api = {
-  get: (path) => request("GET", path),
-  post: (path, body) => request("POST", path, body),
-  patch: (path, body) => request("PATCH", path, body),
-  health: () => fetchWithTimeout(BASE_URL + "/api/health").then(r => r.json()),
-  plans: () => fetchWithTimeout(BASE_URL + "/api/plans").then(r => r.json()),
-  profile: (uid, data) => request("POST", "/api/profile", { uid, ...data }),
-  balance: () => request("GET", "/api/airtel/balance"),
-  goals: () => request("GET", "/api/goals"),
-  createGoal: (uid, goal) => request("POST", "/api/goals", { uid, ...goal }),
-  updateGoal: (goalId, data) => request("PATCH", `/api/goals/${goalId}`, data),
-  save: (uid, data) => request("POST", "/api/save", { uid, ...data }),
-  withdraw: (uid, data) => request("POST", "/api/withdraw", { uid, ...data }),
-  allocate: (uid, goalId, data) => request("POST", `/api/goals/${goalId}/allocate`, { uid, ...data }),
-  deallocate: (uid, goalId, data) => request("POST", `/api/goals/${goalId}/deallocate`, { uid, ...data }),
-  transfer: (uid, data) => request("POST", "/api/transfer", { uid, ...data }),
-  accountExport: () => request("GET", "/api/account/export"),
-  deleteAccount: () => request("POST", "/api/account/delete", { confirmation: "DELETE" }),
-  roundup: (uid, data) => request("POST", "/api/roundup", { uid, ...data }),
-  autosaveRules: () => request("GET", "/api/autosave/rules"),
-  createAutosaveRule: (uid, rule) => request("POST", "/api/autosave/rules", { uid, ...rule }),
-  toggleAutosaveRule: (ruleId, enabled) => request("PATCH", `/api/autosave/rules/${ruleId}`, { enabled }),
-  transactions: (params = "") => request("GET", `/api/transactions${params}`),
-  transactionStatus: (reference) => request("GET", `/api/transactions/${reference}/status`),
-  analytics: () => request("GET", "/api/analytics"),
-  notifications: () => request("GET", "/api/notifications"),
-  markNotificationRead: (notifId) => request("PATCH", `/api/notifications/${notifId}`, {}),
-  unreadCount: () => request("GET", "/api/notifications/unread-count"),
-  subscribe: (uid, plan, data = {}) => request("POST", "/api/subscribe", { uid, plan, ...data }),
-  subscriptionStatus: () => request("GET", "/api/subscribe/status"),
-  merchantCollect: (uid, data) => request("POST", "/api/merchant/collect", { uid, ...data }),
-  merchantDisburse: (uid, data) => request("POST", "/api/merchant/disburse", { uid, ...data }),
-  lookupMerchantCode: (code) => request("GET", `/api/merchant/lookup/${code}`),
-  payMerchant: (uid, data) => request("POST", "/api/merchant/pay", { uid, ...data }),
-  myReferralCode: () => request("GET", "/api/referrals/my-code"),
-  applyReferralCode: (uid, code) => request("POST", "/api/referrals/apply", { uid, code }),
-  startSupportThread: (data) => request("POST", "/api/support/threads", data),
-  mySupportThreads: () => request("GET", "/api/support/threads"),
-  getSupportThread: (threadId) => request("GET", `/api/support/threads/${threadId}`),
-  replySupportThread: (threadId, message) => request("POST", `/api/support/threads/${threadId}/messages`, { message }),
-  aiStatus: () => request("GET", "/api/ai/status"),
-  aiInsights: () => request("GET", "/api/ai/insights"),
-  aiChat: (message) => request("POST", "/api/ai/chat", { message })
+  get: (path) => request("GET", path), post: (path, body) => request("POST", path, body), patch: (path, body) => request("PATCH", path, body),
+  health: () => fetchWithTimeout(BASE_URL + "/api/health").then(r => r.json()), plans: () => fetchWithTimeout(BASE_URL + "/api/plans").then(r => r.json()),
+  profile: (uid, data) => request("POST", "/api/profile", { uid, ...data }), balance: () => request("GET", "/api/airtel/balance"), goals: () => request("GET", "/api/goals"),
+  createGoal: (uid, goal) => request("POST", "/api/goals", { uid, ...goal }), updateGoal: (goalId, data) => request("PATCH", `/api/goals/${goalId}`, data), save: (uid, data) => request("POST", "/api/save", { uid, ...data }), withdraw: (uid, data) => request("POST", "/api/withdraw", { uid, ...data }),
+  allocate: (uid, goalId, data) => request("POST", `/api/goals/${goalId}/allocate`, { uid, ...data }), deallocate: (uid, goalId, data) => request("POST", `/api/goals/${goalId}/deallocate`, { uid, ...data }), transfer: (uid, data) => request("POST", "/api/transfer", { uid, ...data }),
+  accountExport: () => request("GET", "/api/account/export"), deleteAccount: () => request("POST", "/api/account/delete", { confirmation: "DELETE" }), roundup: (uid, data) => request("POST", "/api/roundup", { uid, ...data }),
+  autosaveRules: () => request("GET", "/api/autosave/rules"), createAutosaveRule: (uid, rule) => request("POST", "/api/autosave/rules", { uid, ...rule }), toggleAutosaveRule: (ruleId, enabled) => request("PATCH", `/api/autosave/rules/${ruleId}`, { enabled }),
+  transactions: (params = "") => request("GET", `/api/transactions${params}`), transactionStatus: (reference) => request("GET", `/api/transactions/${reference}/status`),
+  analytics: () => request("GET", "/api/analytics"), notifications: () => request("GET", "/api/notifications"), markNotificationRead: (notifId) => request("PATCH", `/api/notifications/${notifId}`, {}), unreadCount: () => request("GET", "/api/notifications/unread-count"),
+  subscribe: (uid, plan, data = {}) => request("POST", "/api/subscribe", { uid, plan, ...data }), subscriptionStatus: () => request("GET", "/api/subscribe/status"), merchantCollect: (uid, data) => request("POST", "/api/merchant/collect", { uid, ...data }), merchantDisburse: (uid, data) => request("POST", "/api/merchant/disburse", { uid, ...data }),
+  lookupMerchantCode: (code) => request("GET", `/api/merchant/lookup/${code}`), payMerchant: (uid, data) => request("POST", "/api/merchant/pay", { uid, ...data }), myReferralCode: () => request("GET", "/api/referrals/my-code"), applyReferralCode: (uid, code) => request("POST", "/api/referrals/apply", { uid, code }),
+  startSupportThread: (data) => request("POST", "/api/support/threads", data), mySupportThreads: () => request("GET", "/api/support/threads"), getSupportThread: (threadId) => request("GET", `/api/support/threads/${threadId}`), replySupportThread: (threadId, message) => request("POST", `/api/support/threads/${threadId}/messages`, { message }),
+  aiStatus: () => request("GET", "/api/ai/status"), aiInsights: () => request("GET", "/api/ai/insights"), aiChat: (message) => request("POST", "/api/ai/chat", { message })
 };
