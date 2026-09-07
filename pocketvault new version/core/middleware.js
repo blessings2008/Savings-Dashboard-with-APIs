@@ -10,11 +10,29 @@ export function asyncHandler(fn) {
 
 export function rateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
   return (req, res, next) => {
-    const key = req.ip || 'unknown'; const now = Date.now();
-    const record = rateLimitMap.get(key) || { count: 0, start: now };
+    // Admin Firestore backup exports are intentionally protected, but
+    // should not share the normal IP bucket. A shared/public IP (or a
+    // reverse proxy) can otherwise exhaust the export allowance for the
+    // administrator even when they only triggered a few exports.
+    const isAdminBackupExport = req.path === '/api/admin/backups/export' && !!req.headers['x-admin-secret'];
+    const key = isAdminBackupExport
+      ? `admin-backup-export:${crypto.createHash('sha256').update(String(req.headers['x-admin-secret'])).digest('hex')}`
+      : (req.ip || 'unknown');
+    const effectiveMax = isAdminBackupExport ? Math.max(maxRequests, 20) : maxRequests;
+    const recordKey = `${key}:${windowMs}`;
+    const now = Date.now();
+    const record = rateLimitMap.get(recordKey) || { count: 0, start: now };
     if (now - record.start > windowMs) { record.count = 1; record.start = now; } else record.count++;
-    rateLimitMap.set(key, record);
-    if (record.count > maxRequests) return res.status(429).json({ success: false, error: 'Too many requests. Please slow down.' });
+    rateLimitMap.set(recordKey, record);
+    if (record.count > effectiveMax) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((windowMs - (now - record.start)) / 1000));
+      res.set('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        error: 'Too many requests. Please slow down.',
+        retryAfterSeconds
+      });
+    }
     next();
   };
 }
@@ -74,7 +92,7 @@ export async function getUserPlan(uid) {
   }, 60000);
 }
 
-export async function getPlanConfig(uid) {
+export function getPlanConfig(uid) {
   const plan = await getUserPlan(uid);
   return { plan, config: PLANS[plan] };
 }
