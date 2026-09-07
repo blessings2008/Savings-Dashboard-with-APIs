@@ -11,7 +11,7 @@ export function isEmailConfigured() {
   return Boolean(apiKey);
 }
 
-export async function sendEmail({ to, subject, html, text }) {
+export async function sendEmail({ to, subject, html, text, idempotencyKey }) {
   if (!resend) {
     const error = new Error('Resend is not configured. Set RESEND_API_KEY on the server.');
     error.code = 'RESEND_NOT_CONFIGURED';
@@ -24,13 +24,17 @@ export async function sendEmail({ to, subject, html, text }) {
     throw error;
   }
 
-  const { data, error } = await resend.emails.send({
+  const payload = {
     from,
     to: Array.isArray(to) ? to : [to],
     subject,
     ...(html ? { html } : {}),
     ...(text ? { text } : {})
-  });
+  };
+
+  const { data, error } = idempotencyKey
+    ? await resend.emails.send(payload, { idempotencyKey })
+    : await resend.emails.send(payload);
 
   if (error) {
     const wrapped = new Error(error.message || 'Resend email delivery failed.');
