@@ -27,7 +27,6 @@ const normalizeRecipients = to => {
     throw error;
   }
 
-  // Keep malformed values out of the provider request and surface a useful server error.
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (recipients.some(email => !emailPattern.test(email))) {
     const error = new Error('Email contains an invalid recipient address.');
@@ -155,18 +154,18 @@ export function buildTransactionEmail({ type, amount, status = 'completed', refe
     merchant_payment: 'Merchant payment'
   };
   const label = labels[type] || 'Transaction';
-  const safeStatus = String(status).trim().slice(0, 40) || 'completed';
-  const safeReference = String(reference || 'N/A').trim().slice(0, 100);
+  const rawStatus = String(status).trim().slice(0, 40) || 'completed';
+  const rawReference = String(reference || 'N/A').trim().slice(0, 100);
   const formatted = `MWK ${Number(amount).toLocaleString()}`;
   const safeLabel = escapeHtml(label);
   const safeAmount = escapeHtml(formatted);
-  const safeStatus = escapeHtml(safeStatus);
-  const safeReference = escapeHtml(safeReference);
-  const text = `${label} ${String(status).trim() || 'completed'}.\n\nAmount: ${formatted}\nReference: ${safeReference}\n\nOpen PocketVault: ${appUrl}\n\n— PocketVault`;
+  const safeStatus = escapeHtml(rawStatus);
+  const safeReference = escapeHtml(rawReference);
+  const text = `${label} ${rawStatus}.\n\nAmount: ${formatted}\nReference: ${rawReference}\n\nOpen PocketVault: ${appUrl}\n\n— PocketVault`;
   const html = emailShell({
-    preheader: `${label} ${String(status).trim() || 'completed'} — ${formatted}`,
+    preheader: `${label} ${rawStatus} — ${formatted}`,
     eyebrow: 'Account activity',
-    title: `${safeLabel} update`,
+    title: `${label} update`,
     body: `<p style="font-size:15px;line-height:1.6;margin:0 0 20px">Here is a summary of a recent activity on your PocketVault account.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e7ecea;border-radius:14px;overflow:hidden">
 <tr><td style="padding:16px 18px;color:#64748b;font-size:13px">Status</td><td align="right" style="padding:16px 18px;font-weight:700;color:#111827">${safeStatus}</td></tr>
