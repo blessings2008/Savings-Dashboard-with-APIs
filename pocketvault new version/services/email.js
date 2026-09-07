@@ -50,7 +50,7 @@ export function getEmailStatus() {
   };
 }
 
-export async function sendEmail({ to, subject, html, text, idempotencyKey }) {
+export async function sendEmail({ to, subject, html, text, idempotencyKey, tags = [] }) {
   if (!resend) {
     const error = new Error('Resend is not configured. Set RESEND_API_KEY on the server.');
     error.code = 'RESEND_NOT_CONFIGURED';
@@ -66,12 +66,22 @@ export async function sendEmail({ to, subject, html, text, idempotencyKey }) {
   const recipients = normalizeRecipients(to);
   const cleanSubject = String(subject).trim().slice(0, 200);
   const cleanKey = idempotencyKey ? String(idempotencyKey).trim().slice(0, 256) : null;
+  const cleanTags = Array.isArray(tags)
+    ? tags
+      .filter(tag => tag && tag.name && tag.value)
+      .map(tag => ({
+        name: String(tag.name).trim().slice(0, 256),
+        value: String(tag.value).trim().slice(0, 256)
+      }))
+      .slice(0, 10)
+    : [];
 
   const payload = {
     from,
     to: recipients,
     subject: cleanSubject,
     ...(replyTo ? { replyTo } : {}),
+    ...(cleanTags.length ? { tags: cleanTags } : {}),
     ...(html ? { html: String(html) } : {}),
     ...(text ? { text: String(text) } : {})
   };
