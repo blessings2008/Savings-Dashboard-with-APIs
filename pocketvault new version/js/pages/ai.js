@@ -5,13 +5,67 @@ function escapeHTML(value = "") {
   return String(value).replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
 }
 
+function formatMoney(value) {
+  const amount = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(amount) ? `MK ${Math.round(amount).toLocaleString()}` : null;
+}
+
+function renderVisuals(text = "") {
+  const source = String(text);
+  const sentences = source.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+  const cards = [];
+  const seen = new Set();
+
+  const addCard = (label, value, type = "money") => {
+    const key = `${label}:${value}`;
+    if (!value || seen.has(key) || cards.length >= 4) return;
+    seen.add(key);
+    cards.push({ label, value, type });
+  };
+
+  sentences.forEach(sentence => {
+    const lower = sentence.toLowerCase();
+    const money = sentence.match(/(?:mk\s*)?(\d{1,3}(?:,\d{3})+|\d{3,})\s*(?:mwk)?/i);
+    const percent = sentence.match(/(\d+(?:\.\d+)?)\s*%/);
+    if (money) {
+      const value = formatMoney(money[1]);
+      if (/pocketvault balance|your balance|balance is|balance of/.test(lower)) addCard("PocketVault balance", value);
+      else if (/airtel balance|airtel wallet/.test(lower)) addCard("Airtel wallet", value);
+      else if (/spent|spending|outflow|expense/.test(lower)) addCard("Spending", value);
+      else if (/saved|saving|savings/.test(lower)) addCard("Savings", value);
+      else if (/target|goal/.test(lower)) addCard("Goal target", value);
+      else if (/income|received|inflow/.test(lower)) addCard("Income", value);
+    }
+    if (percent) {
+      const value = `${percent[1]}%`;
+      if (/progress|goal/.test(lower)) addCard("Goal progress", value, "percent");
+      else if (/saving rate|savings rate|save rate/.test(lower)) addCard("Savings rate", value, "percent");
+      else if (/spent|spending|income|outflow/.test(lower)) addCard("Share", value, "percent");
+    }
+  });
+
+  const goalPercent = source.match(/(?:goal|target)[^%]{0,100}(\d+(?:\.\d+)?)\s*%|(?:\d+(?:\.\d+)?)\s*%[^\n]{0,100}(?:goal|target)/i);
+  const progress = goalPercent ? Math.max(0, Math.min(100, Number(goalPercent[1]))) : null;
+  const hasGoal = /goal|target|milestone/i.test(source) && progress !== null;
+
+  const visualCards = cards.map(card => `<div class="ai-visual-metric ai-visual-${card.type}"><span>${escapeHTML(card.label)}</span><strong>${escapeHTML(card.value)}</strong></div>`).join("");
+  const progressBlock = hasGoal ? `<div class="ai-visual-progress"><div class="ai-visual-progress-head"><span>Goal progress</span><strong>${progress}%</strong></div><div class="ai-visual-progress-track"><span style="width:${progress}%"></span></div></div>` : "";
+
+  if (!visualCards && !progressBlock) return "";
+  return `<div class="ai-response-visuals" aria-label="Visual summary of the PocketVault data in this answer">${visualCards}${progressBlock}</div>`;
+}
+
 function renderMessage(role, text) {
   const user = role === "user";
+  const safeText = String(text || "");
+  const body = user
+    ? escapeHTML(safeText).replace(/\n/g, "<br>")
+    : `${renderVisuals(safeText)}<div class="ai-response-text">${escapeHTML(safeText).replace(/\n/g, "<br>")}</div>`;
   return `<div class="ai-message ${user ? "ai-message-user" : "ai-message-assistant"} ${user ? "" : "ai-message-ai"}">
     <div class="ai-message-meta">
       ${user ? "You" : '<span class="ai-mini-avatar" aria-hidden="true">✦</span> PocketVault AI'}
     </div>
-    <div class="ai-message-body">${escapeHTML(text).replace(/\n/g, "<br>")}</div>
+    <div class="ai-message-body">${body}</div>
   </div>`;
 }
 
