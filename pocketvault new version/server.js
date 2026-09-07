@@ -211,33 +211,9 @@ const server = app.listen(PORT, () => {
 ║  Security  : Headers + CORS + Sanitizer + Rate limit ✅      ║
 ║  Payments  : ${_paymentProviderLabel}                        ║
 ║  Jobs      : Reconciler + Float monitor + Sub checker ✅     ║
+║  AI        : ${resolveAIProvider() ? `Admin ${resolveAIProvider()} + User AI` : 'Not configured'}                    ║
 ╚══════════════════════════════════════════════════════════════╝
-  `);
-
-  if (!process.env.ADMIN_SECRET) {
-    console.warn('🚨 SECURITY WARNING: ADMIN_SECRET is not set. The admin panel is completely inaccessible until this is configured — set it in Render environment variables.');
-  }
-  if (_activePaymentProvider === 'airtel_direct' && !SECURITY.AIRTEL_WEBHOOK_SECRET) {
-    console.warn('🚨 SECURITY WARNING: Airtel direct is active but AIRTEL_WEBHOOK_SECRET is NOT set. The webhook endpoint will accept unauthenticated requests. Set AIRTEL_WEBHOOK_SECRET before going live with real money.');
-  }
-  if (_activePaymentProvider === 'paychangu' && !PAYCHANGU.WEBHOOK_SECRET) {
-    console.warn('🚨 SECURITY WARNING: PayChangu is active but PAYCHANGU_WEBHOOK_SECRET is NOT set. The PayChangu webhook endpoint will accept unauthenticated requests. Set PAYCHANGU_WEBHOOK_SECRET before going live with real money.');
-  }
-  if (_activePaymentProvider === 'mock') {
-    console.log('ℹ️  Running in mock mode — no AIRTEL_CLIENT_ID or PAYCHANGU_SECRET_KEY configured yet. All payments will be simulated instantly.');
-  }
-  const activeProvider = resolveAIProvider();
-  const providerNames = { anthropic: 'Anthropic (Claude)', gemini: 'Google (Gemini)', groq: 'Groq (Llama)' };
-  if (!activeProvider) {
-    console.log('ℹ️  No AI provider configured — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY to enable admin AI features.');
-  } else {
-    console.log(`✅ AI features configured — using ${providerNames[activeProvider]}. AI features are live.`);
-  }
-});
-
-process.on('SIGTERM', () => {
-  console.log('🛑 Shutting down gracefully...');
-  server.close(() => process.exit(0));
+`);
 });
 
 export default app;
