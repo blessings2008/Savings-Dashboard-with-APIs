@@ -11,19 +11,24 @@ function renderMarkdown(text) {
 }
 function findMoney(source, labels) { const m = source.match(new RegExp(`(?:${labels.join("|")})[^\\n]{0,110}?([-−]?[\\d,]+(?:\\.\\d+)?)\\s*(?:MWK|MK|K)\\b`, "i")); if (!m) return null; const n = Number(m[1].replace(/,/g, "").replace(/−/g, "-")); return Number.isFinite(n) ? n : null; }
 function extractVisuals(text) {
-  const s = String(text || ""), v = [], add = (label, labels, icon, tone) => { const n = findMoney(s, labels); if (n !== null) v.push({ label, value: money(n), icon, tone }); };
-  add("Total saved", ["total saved", "saved in the last", "recent-savings metric"], "↗", "positive");
-  add("PocketVault balance", ["current pocketvault balance", "pocketvault balance"], "◉", "balance");
-  add("Outgoing spend", ["outgoing spend", "outgoing spending", "total spend"], "↘", "warning");
-  add("Net cash flow", ["net cash flow"], "≈", "neutral");
-  const g = s.match(/(?:active savings goals|active goals)[^\n]{0,30}?([0-9]+)\b/i); if (g) v.push({ label: "Active goals", value: g[1], icon: "◇", tone: "goal" });
-  const p = s.match(/(?:progress|saved[^\n]{0,35}of[^\n]{0,35}target)[^\n]{0,45}?([0-9]{1,3}(?:\.\d+)?)\s*%/i); if (p) { const pct = Math.max(0, Math.min(100, Number(p[1]))); v.push({ label: "Goal progress", value: `${pct}%`, icon: "◎", tone: "goal", progress: pct }); }
-  const t = s.match(/(?:spending trend|spend trend)[^\n]{0,180}?(-?[0-9]+(?:\.\d+)?)\s*%/i); if (t) { const pct = Number(t[1]); if (Number.isFinite(pct)) v.push({ label: "Spending trend", value: `${pct > 0 ? "+" : ""}${pct}%`, icon: pct > 0 ? "↗" : "↘", tone: pct > 0 ? "warning" : "positive", trend: pct }); }
+  const s = String(text || ""), v = [], add = (label, labels, tone) => { const n = findMoney(s, labels); if (n !== null) v.push({ label, value: money(n), tone }); };
+  add("Total saved", ["total saved", "saved in the last", "recent-savings metric"], "positive");
+  add("PocketVault balance", ["current pocketvault balance", "pocketvault balance"], "balance");
+  add("Outgoing spend", ["outgoing spend", "outgoing spending", "total spend"], "warning");
+  add("Net cash flow", ["net cash flow"], "neutral");
+  const goals = s.match(/(?:active savings goals|active goals)[^\n]{0,30}?([0-9]+)\b/i); if (goals) v.push({ label: "Active goals", value: goals[1], tone: "default" });
+  const progress = s.match(/(?:progress|saved[^\n]{0,35}of[^\n]{0,35}target)[^\n]{0,45}?([0-9]{1,3}(?:\.\d+)?)\s*%/i); if (progress) { const pct = Math.max(0, Math.min(100, Number(progress[1]))); v.push({ label: "Goal progress", value: `${pct}%`, tone: "percent", progress: pct }); }
+  const trend = s.match(/(?:spending trend|spend trend)[^\n]{0,180}?(-?[0-9]+(?:\.\d+)?)\s*%/i); if (trend) { const pct = Number(trend[1]); if (Number.isFinite(pct)) v.push({ label: "Spending trend", value: `${pct > 0 ? "+" : ""}${pct}%`, tone: pct > 0 ? "warning" : "positive" }); }
   return v.slice(0, 8);
 }
-function renderVisuals(text) { const v = extractVisuals(text); if (!v.length) return ""; return `<div class="ai-visuals" aria-label="Financial summary">${v.map(x => `<article class="ai-visual-card ai-visual-${x.tone}"><div class="ai-visual-top"><span class="ai-visual-icon">${x.icon}</span><span>${escapeHTML(x.label)}</span></div><strong>${escapeHTML(x.value)}</strong>${typeof x.progress === "number" ? `<div class="ai-visual-progress"><span style="width:${x.progress}%"></span></div>` : ""}${typeof x.trend === "number" ? `<div class="ai-trend-bar"><i style="width:${Math.min(100, Math.max(8, Math.abs(x.trend)))}%"></i></div>` : ""}</article>`).join("")}</div>`; }
-function renderAssistantAnswer(text) { return `${renderVisuals(text)}<div class="ai-rich-text">${renderMarkdown(text)}</div>`; }
-function renderMessage(role, text) { const user = role === "user"; return `<div class="ai-message ${user ? "ai-message-user" : "ai-message-assistant ai-message-ai ai-rich-answer"}"><div class="ai-message-meta">${user ? "You" : '<span class="ai-mini-avatar" aria-hidden="true">✦</span> PocketVault AI'}</div><div class="ai-message-body">${user ? escapeHTML(text).replace(/\n/g, "<br>") : renderAssistantAnswer(text)}</div></div>`; }
+function renderVisuals(text) {
+  const visuals = extractVisuals(text); if (!visuals.length) return "";
+  const metricCards = visuals.filter(x => x.progress === undefined).map(x => `<div class="ai-visual-metric ai-visual-${x.tone}"><span>${escapeHTML(x.label)}</span><strong>${escapeHTML(x.value)}</strong></div>`).join("");
+  const progressCards = visuals.filter(x => typeof x.progress === "number").map(x => `<div class="ai-visual-progress"><div class="ai-visual-progress-head"><span>${escapeHTML(x.label)}</span><strong>${escapeHTML(x.value)}</strong></div><div class="ai-visual-progress-track"><span style="width:${x.progress}%"></span></div></div>`).join("");
+  return `<div class="ai-response-visuals" aria-label="Financial summary">${metricCards}${progressCards}</div>`;
+}
+function renderAssistantAnswer(text) { return `${renderVisuals(text)}<div class="ai-response-text">${renderMarkdown(text)}</div>`; }
+function renderMessage(role, text) { const user = role === "user"; return `<div class="ai-message ${user ? "ai-message-user" : "ai-message-assistant ai-message-ai"}"><div class="ai-message-meta">${user ? "You" : '<span class="ai-mini-avatar" aria-hidden="true">✦</span> PocketVault AI'}</div><div class="ai-message-body">${user ? escapeHTML(text).replace(/\n/g, "<br>") : renderAssistantAnswer(text)}</div></div>`; }
 function renderInsight(item) { const severity = ["positive", "warning", "info"].includes(item?.severity) ? item.severity : "info"; const icon = severity === "positive" ? "↗" : severity === "warning" ? "!" : "✦"; return `<article class="ai-insight ai-insight-${severity}"><div class="ai-insight-icon" aria-hidden="true">${icon}</div><div><div class="ai-insight-title">${escapeHTML(item?.title || "PocketVault insight")}</div><div class="ai-insight-text">${escapeHTML(item?.text || "")}</div></div></article>`; }
 export async function renderAIPage(main, navigate) {
   let status, insightData; try { [status, insightData] = await Promise.all([api.aiStatus(), api.aiInsights()]); } catch (err) { try { status = await api.aiStatus(); } catch (e) { status = { error: e.message }; } insightData = { insights: [] }; }
