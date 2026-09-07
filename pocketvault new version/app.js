@@ -3,6 +3,7 @@ import { auth } from "./firebase.js";
 import { renderLogin, watchAuth } from "./auth.js";
 import { api } from "./api.js";
 import { getDeviceFingerprint } from "./js/core/fingerprint.js";
+import { renderEmailOtp } from "./js/core/email-otp.js";
 import { state } from "./js/core/state.js";
 import { renderShell } from "./js/shell.js";
 import { renderDashboardPage } from "./js/pages/dashboard.js";
@@ -46,9 +47,24 @@ async function navigate(page) {
   }
 }
 
-watchAuth(async user => {
-  state.user = user; renderShell(user, navigate);
+async function enterVerifiedSession(user) {
+  state.user = user;
+  renderShell(user, navigate);
   loadUserProfile({ api, state }).then(() => { if (state.currentPage === "dashboard") navigate("dashboard"); });
   api.post("/api/profile", { uid: user.uid, deviceFingerprint: getDeviceFingerprint() }).catch(() => {});
   navigate("dashboard");
+}
+
+watchAuth(async user => {
+  try {
+    const status = await api.get("/api/auth/email-otp/status");
+    if (!status.verified) {
+      renderEmailOtp(user, enterVerifiedSession);
+      return;
+    }
+    await enterVerifiedSession(user);
+  } catch (error) {
+    console.error("Email verification check failed:", error);
+    renderEmailOtp(user, enterVerifiedSession);
+  }
 }, () => { state.user = null; renderLogin(); });
