@@ -47,6 +47,10 @@ router.post('/api/email/welcome',
       to: email,
       subject: 'Welcome to PocketVault 🇲🇼',
       idempotencyKey: `welcome-user/${uid}`,
+      tags: [
+        { name: 'category', value: 'welcome' },
+        { name: 'product', value: 'pocketvault' }
+      ],
       ...template
     });
 
@@ -83,13 +87,17 @@ router.post('/api/email/transaction',
       reference: rawReference
     });
 
-    // Include the request's stable transaction attributes so two different
-    // transactions cannot accidentally share one Resend idempotency key.
+    // Include stable transaction attributes so two different transactions
+    // cannot accidentally share one Resend idempotency key.
     const idempotencyKey = `transaction/${uid}/${type}/${rawReference}/${parsedAmount}/${rawStatus}`.slice(0, 256);
     const result = await sendEmail({
       to: email,
       subject: `${type.replace('_', ' ')} ${rawStatus} — PocketVault`,
       idempotencyKey,
+      tags: [
+        { name: 'category', value: 'transaction' },
+        { name: 'transaction_type', value: type }
+      ],
       ...template
     });
 
