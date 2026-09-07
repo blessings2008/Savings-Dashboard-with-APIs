@@ -18,7 +18,7 @@ import { validateEnvironment, db, adminAuth } from './core/firebase.js';
 import { AIRTEL, PAYCHANGU, SECURITY, resolvePaymentProvider } from './core/config.js';
 import { sanitizeBody, rateLimit, requireAuth } from './core/middleware.js';
 import { log, logSystemError, sendExternalAlert, fetchWithRetry } from './helpers.js';
-import { sendEmail } from './services/email.js';
+import { sendEmail, buildWelcomeEmail } from './services/email.js';
 
 import userRoutes from './routes/user.js';
 import userAIRoutes from './routes/user-ai.js';
@@ -93,12 +93,12 @@ app.post('/api/profile', requireAuth, async (req, res, next) => {
       if (user.email) {
         const name = data.name || user.displayName || req.body.name || 'there';
         try {
+          const template = buildWelcomeEmail(name);
           const result = await sendEmail({
             to: user.email,
             subject: 'Welcome to PocketVault 🇲🇼',
             idempotencyKey: `welcome-user/${uid}`,
-            text: `Hi ${name},\n\nWelcome to PocketVault. Your account is ready. Start building your savings goals and track your money smarter.\n\n— PocketVault`,
-            html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;line-height:1.6;color:#17202a"><h2>Welcome to PocketVault 🇲🇼</h2><p>Hi ${String(name).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]))},</p><p>Your PocketVault account is ready.</p><p>Start building savings goals, tracking your money and making progress toward what matters to you.</p><p>— PocketVault</p></div>`
+            ...template
           });
           await db.collection('users').doc(uid).set({
             welcomeEmailSentAt: new Date().toISOString(),
@@ -211,9 +211,33 @@ const server = app.listen(PORT, () => {
 ║  Security  : Headers + CORS + Sanitizer + Rate limit ✅      ║
 ║  Payments  : ${_paymentProviderLabel}                        ║
 ║  Jobs      : Reconciler + Float monitor + Sub checker ✅     ║
-║  AI        : ${resolveAIProvider() ? `Admin ${resolveAIProvider()} + User AI` : 'Not configured'}                    ║
 ╚══════════════════════════════════════════════════════════════╝
-`);
+  `);
+
+  if (!process.env.ADMIN_SECRET) {
+    console.warn('🚨 SECURITY WARNING: ADMIN_SECRET is not set. The admin panel is completely inaccessible until this is configured — set it in Render environment variables.');
+  }
+  if (_activePaymentProvider === 'airtel_direct' && !SECURITY.AIRTEL_WEBHOOK_SECRET) {
+    console.warn('🚨 SECURITY WARNING: Airtel direct is active but AIRTEL_WEBHOOK_SECRET is NOT set. The webhook endpoint will accept unauthenticated requests. Set AIRTEL_WEBHOOK_SECRET before going live with real money.');
+  }
+  if (_activePaymentProvider === 'paychangu' && !PAYCHANGU.WEBHOOK_SECRET) {
+    console.warn('🚨 SECURITY WARNING: PayChangu is active but PAYCHANGU_WEBHOOK_SECRET is NOT set. The PayChangu webhook endpoint will accept unauthenticated requests. Set PAYCHANGU_WEBHOOK_SECRET before going live with real money.');
+  }
+  if (_activePaymentProvider === 'mock') {
+    console.log('ℹ️  Running in mock mode — no AIRTEL_CLIENT_ID or PAYCHANGU_SECRET_KEY configured yet. All payments will be simulated instantly.');
+  }
+  const activeProvider = resolveAIProvider();
+  const providerNames = { anthropic: 'Anthropic (Claude)', gemini: 'Google (Gemini)', groq: 'Groq (Llama)' };
+  if (!activeProvider) {
+    console.log('ℹ️  No AI provider configured — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY to enable admin AI features.');
+  } else {
+    console.log(`✅ AI features configured — using ${providerNames[activeProvider]}. AI features are live.`);
+  }
+});
+
+process.on('SIGTERM', () => {
+  console.log('🛑 Shutting down gracefully...');
+  server.close(() => process.exit(0));
 });
 
 export default app;
