@@ -1,6 +1,4 @@
-/* PocketVault stylesheet entrypoint.
-   Feature styles are now split into modules. Keep this file as the single
-   stylesheet referenced by the existing HTML so no markup changes are needed. */
+/* PocketVault stylesheet entrypoint. */
 @import url('./css/base.css');
 @import url('./css/auth.css');
 @import url('./css/layout.css');
@@ -16,3 +14,4 @@
 @import url('./css/components.css');
 @import url('./css/animations.css');
 @import url('./css/responsive.css');
+@import url('./css/visual-reset.css');
