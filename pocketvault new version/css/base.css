@@ -1,33 +1,36 @@
 /* PocketVault — base module */
 
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #060910;
-  --surface: #0d1117;
-  --surface2: #131920;
-  --border: rgba(255,255,255,0.06);
-  --green: #00e5a0;
-  --green2: #00b37a;
-  --blue: #0ea5e9;
-  --amber: #f59e0b;
-  --red: #f43f5e;
-  --purple: #a855f7;
-  --text: #f0f4f8;
-  --muted: rgba(240,244,248,0.45);
-  --radius: 20px;
-  --sidebar-w: 230px;
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --surface2: #f0f2ef;
+  --surface3: #e8ebe7;
+  --border: #dfe3de;
+  --green: #087f5b;
+  --green2: #066b4c;
+  --blue: #1769aa;
+  --amber: #a86500;
+  --red: #b42318;
+  --purple: #6941c6;
+  --text: #17201c;
+  --muted: #66736d;
+  --text-muted: #66736d;
+  --sidebar-w: 224px;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(20,30,25,.05);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { height: 100%; }
+html, body { height:100%; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  -webkit-font-smoothing: antialiased;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
 }
 
-h1, h2, h3, h4, .syne { font-family: 'Syne', sans-serif; }
-a { color: inherit; }
+h1,h2,h3,h4,.syne { font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+a { color:inherit; }
