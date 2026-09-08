@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 
 const fmtMoney = value => `MWK ${Number(value || 0).toLocaleString()}`;
 const fmtDate = value => { if (!value) return '—'; const date = value instanceof Date ? value : new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('en-MW', { dateStyle: 'medium', timeStyle: 'short' }); };
+const txId = t => `PV-${String(t?.id || t?.transactionId || t?.txId || '—').replace(/^PV-/i, '').slice(0, 16).toUpperCase()}`;
 
 function addHeader(doc, title, subtitle) {
   doc.rect(0, 0, 612, 92).fill('#111827');
@@ -29,8 +30,8 @@ export function buildTransactionHistoryPdf({ user, transactions = [], from, to }
     doc.font('Helvetica').fontSize(10).fillColor('#64748b').text(`${fmtDate(from)} -> ${fmtDate(to)}`, 42, doc.y, { width: 528 }); doc.moveDown(1.2);
     const completed = transactions.filter(t => String(t.status || '').toLowerCase() === 'completed'); const total = completed.reduce((sum, t) => sum + Number(t.amount || 0), 0);
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text(`Transactions: ${transactions.length}    •    Completed volume: ${fmtMoney(total)}`); doc.moveDown(1);
-    addTable(doc, ['Date', 'Type', 'Amount', 'Status', 'Reference'], transactions.map(t => [fmtDate(t.timestamp), t.type || 'transaction', fmtMoney(t.amount), t.status || '—', t.reference || t.airtelRef || '—']), [112, 112, 92, 86, 126]);
-    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('This report is generated from the transaction records associated with your PocketVault account.');
+    addTable(doc, ['Transaction ID', 'Date', 'Type', 'Amount', 'Status', 'Reference'], transactions.map(t => [txId(t), fmtDate(t.timestamp), t.type || 'transaction', fmtMoney(t.amount), t.status || '—', t.reference || t.airtelRef || '—']), [92, 100, 86, 82, 78, 90]);
+    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('Transaction ID is PocketVault’s identifier for locating and referencing a transaction. Provider references are shown separately when available.');
   });
 }
 
@@ -43,7 +44,7 @@ export function buildMonthlyAdminPdf({ monthLabel, metrics, transactions = [] })
     doc.y = y + 78; doc.font('Helvetica-Bold').fontSize(13).fillColor('#111827').text('Plan distribution'); doc.moveDown(.6);
     addTable(doc, ['Plan', 'Users', 'Share'], [['Free', metrics.plans.free || 0, `${metrics.plans.freePct || 0}%`], ['Pro', metrics.plans.pro || 0, `${metrics.plans.proPct || 0}%`], ['Business', metrics.plans.business || 0, `${metrics.plans.businessPct || 0}%`]], [180, 160, 188]);
     doc.font('Helvetica-Bold').fontSize(13).fillColor('#111827').text('Transaction activity'); doc.moveDown(.6);
-    addTable(doc, ['Date', 'Type', 'Amount', 'Status', 'User'], transactions.slice(0, 100).map(t => [fmtDate(t.timestamp), t.type || 'transaction', fmtMoney(t.amount), t.status || '—', t.uid || '—']), [100, 105, 92, 86, 145]);
+    addTable(doc, ['Transaction ID', 'Date', 'Type', 'Amount', 'Status', 'User'], transactions.slice(0, 100).map(t => [txId(t), fmtDate(t.timestamp), t.type || 'transaction', fmtMoney(t.amount), t.status || '—', t.uid || '—']), [82, 90, 78, 82, 76, 120]);
   });
 }
 
