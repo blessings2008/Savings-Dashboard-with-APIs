@@ -1,0 +1,11 @@
+/* PocketVault — final visual consistency layer */
+/* Keeps the product practical and financial: restrained surfaces, controls and hierarchy. */
+.card,.stat,.goal-card,.goal-pill,.balance-hero,.modal,.ai-chat-card,.ai-side-card{border-radius:10px}
+.quick-action-icon,.mobile-more-item,.mobile-more-icon{border-radius:8px}
+.merchant-stat{border-radius:10px}
+.btn,.input,select.input,textarea.input{border-radius:8px}
+.badge,.status-badge{border-radius:6px}
+.progress,.progress-track{border-radius:4px}
+.progress-fill{border-radius:4px}
+.mobile-more-sheet{border-radius:12px 12px 0 0;box-shadow:0 -8px 24px rgba(20,30,25,.12)}
+.modal-overlay{backdrop-filter:none}
