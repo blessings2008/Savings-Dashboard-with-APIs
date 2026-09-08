@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { db, adminAuth } from '../core/firebase.js';
 import { buildTransactionHistoryPdf, buildMonthlyAdminPdf } from './pdf.js';
 import { sendEmail } from './email.js';
@@ -105,7 +106,12 @@ export async function sendMonthlyAdminReport({ year, month, to }) {
   const recipient = to || process.env.ADMIN_REPORT_EMAIL;
   if (!recipient) { const e = new Error('Set ADMIN_REPORT_EMAIL before sending monthly admin reports.'); e.statusCode = 500; throw e; }
   const pdf = await buildMonthlyAdminPdf(report);
-  const key = `admin-monthly-report/${year}-${String(month).padStart(2, '0')}`;
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  const reportSignature = createHash('sha256')
+    .update(pdf)
+    .digest('hex')
+    .slice(0, 32);
+  const key = `admin-monthly-report/${monthKey}/${reportSignature}`;
   const result = await sendEmail({
     to: recipient,
     subject: `PocketVault monthly report — ${report.monthLabel}`,
