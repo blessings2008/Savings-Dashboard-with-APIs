@@ -13,4 +13,39 @@ async function transfer(e,source){e.preventDefault();const form=e.currentTarget,
 async function pay(id){if(!confirm('Pay the two referral bonuses from the Referral Pool?'))return;try{const r=await fetch(`/api/admin/referrals/${encodeURIComponent(id)}/reward`,{method:'POST',headers:headers()});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);alert(d.alreadyPaid?'Reward was already paid.':`Paid ${mwk(d.paid)} total.`);load();}catch(e){alert(e.message);}}
 async function addOverviewCard(){const main=document.getElementById('main-content');if(!main||currentPage!=='overview'||document.getElementById('referral-pool-overview'))return;try{const d=await getOverview(),p=d.pool||{};const wrap=document.createElement('div');wrap.id='referral-pool-overview';wrap.className='ref-overview-card';wrap.innerHTML=`<div><span>Referral Pool</span><strong>${mwk(p.availableBalance)}</strong></div><button class="btn btn-outline btn-sm" onclick="navigate('referrals')">Open referral system</button>`;main.prepend(wrap);}catch{}}
 return{load,filter,transfer,pay,addOverviewCard};})();
-(function wireReferralAdmin(){const originalNavigate=window.navigate;window.navigate=async function(page,param){if(page==='referrals'){currentPage='referrals';document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page==='referrals'));const main=document.getElementById('main-content');if(main){main.innerHTML='<div id="referrals-page"></div>';await ReferralAdmin.load();}return;}const result=await originalNavigate(page,param);if(page==='overview')ReferralAdmin.addOverviewCard();return result;};const nav=document.querySelector('.sidebar-nav');if(nav&&!nav.querySelector('[data-page="referrals"]')){const item=document.createElement('div');item.className='nav-item';item.dataset.page='referrals';item.innerHTML='<span class="nav-icon">R</span><span>Referrals</span>';item.addEventListener('click',()=>window.navigate('referrals'));nav.appendChild(item);}if(typeof currentPage!=='undefined'&&currentPage==='overview')setTimeout(()=>ReferralAdmin.addOverviewCard(),250);})();
+(function wireReferralAdmin(){
+  let wrapped=false;
+  function install(){
+    const nav=document.querySelector('.sidebar-nav');
+    if(nav&&!nav.querySelector('[data-page="referrals"]')){
+      const item=document.createElement('div');
+      item.className='nav-item';
+      item.dataset.page='referrals';
+      item.innerHTML='<span class="nav-icon">R</span><span>Referrals</span>';
+      item.addEventListener('click',()=>window.navigate('referrals'));
+      nav.appendChild(item);
+    }
+    if(!wrapped&&typeof window.navigate==='function'){
+      const originalNavigate=window.navigate;
+      window.navigate=async function(page,param){
+        if(page==='referrals'){
+          currentPage='referrals';
+          document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page==='referrals'));
+          const main=document.getElementById('main-content');
+          if(main){main.innerHTML='<div id="referrals-page"></div>';await ReferralAdmin.load();}
+          return;
+        }
+        const result=await originalNavigate(page,param);
+        if(page==='overview')setTimeout(()=>ReferralAdmin.addOverviewCard(),0);
+        return result;
+      };
+      wrapped=true;
+    }
+    if(typeof currentPage!=='undefined'&&currentPage==='overview')setTimeout(()=>ReferralAdmin.addOverviewCard(),0);
+  }
+  install();
+  const observer=new MutationObserver(()=>install());
+  observer.observe(document.body,{childList:true,subtree:true});
+  setTimeout(()=>observer.disconnect(),10000);
+  window.ReferralAdmin=ReferralAdmin;
+})();
