@@ -2,41 +2,11 @@ import express from 'express';
 import { requireAdmin, asyncHandler } from '../core/middleware.js';
 import { db } from '../core/firebase.js';
 import { analyzeError, analyzeSupport, generateMonthlyNarrative, resolveSystemAIProvider, runSecondMeMonthlyReport, scanForAttention } from '../core/system-ai.js';
-
-const router = express.Router();
-
-router.get('/api/admin/second-me/status', requireAdmin, asyncHandler(async (req,res) => {
-  res.json({success:true,provider:resolveSystemAIProvider(),configured:Boolean(resolveSystemAIProvider()),emailConfigured:Boolean(process.env.ADMIN_REPORT_EMAIL),role:'internal operations, support and reporting'});
-}));
-
-router.post('/api/admin/second-me/error/:id/analyze', requireAdmin, asyncHandler(async (req,res) => {
-  const snap = await db.collection('system_errors').doc(req.params.id).get();
-  if (!snap.exists) return res.status(404).json({error:'System error not found.'});
-  const item = {id:snap.id,...snap.data()};
-  res.json({success:true,analysis:await analyzeError(item)});
-}));
-
-router.post('/api/admin/second-me/support/analyze', requireAdmin, asyncHandler(async (req,res) => {
-  const threadId = String(req.body?.threadId || '').trim();
-  if (!threadId) return res.status(400).json({error:'threadId is required.'});
-  const snap = await db.collection('support_threads').doc(threadId).get();
-  if (!snap.exists) return res.status(404).json({error:'Support thread not found.'});
-  res.json({success:true,analysis:await analyzeSupport({id:snap.id,...snap.data()})});
-}));
-
-router.post('/api/admin/second-me/scan', requireAdmin, asyncHandler(async (req,res) => {
-  res.json({success:true,...await scanForAttention()});
-}));
-
-router.post('/api/admin/second-me/monthly-report', requireAdmin, asyncHandler(async (req,res) => {
-  res.json({success:true,...await runSecondMeMonthlyReport({year:req.body?.year,month:req.body?.month,to:req.body?.to})});
-}));
-
-router.post('/api/admin/second-me/monthly-preview', requireAdmin, asyncHandler(async (req,res) => {
-  const now = new Date(); const year = Number(req.body?.year) || (now.getMonth() === 0 ? now.getFullYear()-1 : now.getFullYear()); const month = Number(req.body?.month) || (now.getMonth() === 0 ? 12 : now.getMonth());
-  const { buildMonthlyAdminReport } = await import('../services/reports.js');
-  const report = await buildMonthlyAdminReport({year,month});
-  res.json({success:true,monthLabel:report.monthLabel,metrics:report.metrics,narrative:await generateMonthlyNarrative(report)});
-}));
-
+const router=express.Router();
+router.get('/api/admin/second-me/status',requireAdmin,asyncHandler(async(req,res)=>res.json({success:true,provider:resolveSystemAIProvider(),configured:Boolean(resolveSystemAIProvider()),emailConfigured:Boolean(process.env.ADMIN_REPORT_EMAIL),role:'internal operations, support and reporting'})));
+router.post('/api/admin/second-me/error/:id/analyze',requireAdmin,asyncHandler(async(req,res)=>{const snap=await db.collection('system_errors').doc(req.params.id).get();if(!snap.exists)return res.status(404).json({error:'System error not found.'});res.json({success:true,analysis:await analyzeError({id:snap.id,...snap.data()})});}));
+router.post('/api/admin/second-me/support/analyze',requireAdmin,asyncHandler(async(req,res)=>{const thread=req.body?.thread;if(!thread)return res.status(400).json({error:'Support thread data is required.'});res.json({success:true,analysis:await analyzeSupport(thread)});}));
+router.post('/api/admin/second-me/scan',requireAdmin,asyncHandler(async(req,res)=>res.json({success:true,...await scanForAttention()})));
+router.post('/api/admin/second-me/monthly-report',requireAdmin,asyncHandler(async(req,res)=>res.json({success:true,...await runSecondMeMonthlyReport({year:req.body?.year,month:req.body?.month,to:req.body?.to})})));
+router.post('/api/admin/second-me/monthly-preview',requireAdmin,asyncHandler(async(req,res)=>{const now=new Date();const year=Number(req.body?.year)||(now.getMonth()===0?now.getFullYear()-1:now.getFullYear());const month=Number(req.body?.month)||(now.getMonth()===0?12:now.getMonth());const {buildMonthlyAdminReport}=await import('../services/reports.js');const report=await buildMonthlyAdminReport({year,month});res.json({success:true,monthLabel:report.monthLabel,metrics:report.metrics,narrative:await generateMonthlyNarrative(report)});}));
 export default router;
