@@ -17,11 +17,11 @@
       const rows = overview.referrals || [];
       root.innerHTML = `
         <div class="page-header"><div><div class="eyebrow">Growth & rewards</div><h1>Referrals</h1><p>Manage the referral programme, funding pool and reward history.</p></div></div>
-        <div class="stats-grid referral-stats">
-          <div class="stat-card"><div class="stat-label">Referral pool</div><div class="stat-value">${money(overview.pool?.availableBalance)}</div><div class="stat-meta">Available to pay rewards</div></div>
-          <div class="stat-card"><div class="stat-label">Total funded</div><div class="stat-value">${money(overview.pool?.totalFunded)}</div><div class="stat-meta">Money moved into pool</div></div>
-          <div class="stat-card"><div class="stat-label">Rewards paid</div><div class="stat-value">${money(overview.pool?.totalPaid)}</div><div class="stat-meta">Paid to participants</div></div>
-          <div class="stat-card"><div class="stat-label">Participants</div><div class="stat-value">${overview.totalReferrals || 0}</div><div class="stat-meta">Tracked referrals</div></div>
+        <div class="referral-stats">
+          <div class="referral-stat"><div class="stat-label">Referral pool</div><div class="stat-value">${money(overview.pool?.availableBalance)}</div><div class="stat-meta">Available to pay rewards</div></div>
+          <div class="referral-stat"><div class="stat-label">Total funded</div><div class="stat-value">${money(overview.pool?.totalFunded)}</div><div class="stat-meta">Money moved into pool</div></div>
+          <div class="referral-stat"><div class="stat-label">Rewards paid</div><div class="stat-value">${money(overview.pool?.totalPaid)}</div><div class="stat-meta">Paid to participants</div></div>
+          <div class="referral-stat"><div class="stat-label">Participants</div><div class="stat-value">${overview.totalReferrals || 0}</div><div class="stat-meta">Tracked referrals</div></div>
         </div>
         <div class="referral-grid">
           <section class="panel"><div class="panel-head"><div><h2>Fund referral pool</h2><p>Transfer funds into the dedicated referral balance.</p></div></div>
@@ -55,7 +55,7 @@
     return rows.map(r => `<tr data-search="${esc(`${r.referralId} ${r.referrerEmail} ${r.referredEmail}`.toLowerCase())}"><td>${esc(r.referrerEmail || r.referrerUid)}</td><td>${esc(r.referredEmail || r.referredUid)}</td><td>${esc(r.kycStatus || 'unverified')}</td><td>${r.firstSave ? 'Yes' : 'No'}</td><td>${esc(r.rewardStatus || r.status || 'pending')}</td><td>${money(r.rewardTotal ?? 1000)}</td><td>${r.rewardStatus === 'paid' ? '<span class="muted">Paid</span>' : `<button class="btn btn-primary btn-sm" data-pay="${esc(r.referralId)}">Pay reward</button>`}</td></tr>`).join('');
   }
 
-  function wire(root, rows) {
+  function wire(root) {
     root.querySelector('#referral-fund-form')?.addEventListener('submit', async e => {
       e.preventDefault(); const form = e.currentTarget; const fd = new FormData(form); const btn = form.querySelector('button'); btn.disabled = true;
       try { await API('/api/admin/referrals/pool/fund', 'POST', { source: fd.get('source'), amount: Number(fd.get('amount')), reference: fd.get('reference') || null }); form.reset(); await load(); }
@@ -70,30 +70,24 @@
     }));
   }
 
-  function install() {
-    if (!document.body) return;
-    if (!document.getElementById('referral-nav')) {
-      const nav = document.querySelector('.sidebar-nav');
-      if (nav) {
-        const item = document.createElement('div'); item.id = 'referral-nav'; item.className = 'nav-item'; item.dataset.page = 'referrals';
-        item.innerHTML = '<span class="nav-icon">R</span><span>Referrals</span>';
-        item.onclick = () => window.navigate && window.navigate('referrals'); nav.appendChild(item);
-      }
-    }
-    if (!window.__pvReferralNavigateWrapped && typeof window.navigate === 'function') {
-      const original = window.navigate;
-      window.navigate = async function(page, param) {
-        if (page === 'referrals') {
-          document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === 'referrals'));
-          const main = document.getElementById('main-content'); if (main) { main.innerHTML = '<div id="referrals-page"></div>'; await load(); }
-          return;
-        }
-        return original(page, param);
-      };
-      window.__pvReferralNavigateWrapped = true;
-    }
+  function openPage() {
+    document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === 'referrals'));
+    const main = document.getElementById('main-content');
+    if (!main) return;
+    main.innerHTML = '<div id="referrals-page"></div>';
+    load();
   }
-  window.ReferralAdmin = { load };
+
+  function install() {
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav || nav.querySelector('[data-page="referrals"]')) return;
+    const item = document.createElement('div');
+    item.className = 'nav-item'; item.dataset.page = 'referrals'; item.innerHTML = '<span class="nav-icon">R</span><span>Referrals</span>';
+    item.addEventListener('click', openPage);
+    nav.appendChild(item);
+  }
+
+  window.ReferralAdmin = { load, openPage };
   install();
   new MutationObserver(install).observe(document.documentElement, { childList: true, subtree: true });
 })();
