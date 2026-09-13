@@ -30,8 +30,7 @@ export async function downloadAuthenticatedPdf(path, filename) {
   const headers = await authHeader();
   const res = await fetchWithTimeout(BASE_URL + path, { method: "GET", headers });
   if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Report download failed (${res.status})`); }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export const api = {
@@ -47,5 +46,6 @@ export const api = {
   subscribe: (uid, plan, data = {}) => request("POST", "/api/subscribe", { uid, plan, ...data }), subscriptionStatus: () => request("GET", "/api/subscribe/status"), merchantCollect: (uid, data) => request("POST", "/api/merchant/collect", { uid, ...data }), merchantDisburse: (uid, data) => request("POST", "/api/merchant/disburse", { uid, ...data }),
   lookupMerchantCode: (code) => request("GET", `/api/merchant/lookup/${code}`), payMerchant: (uid, data) => request("POST", "/api/merchant/pay", { uid, ...data }), myReferralCode: () => request("GET", "/api/referrals/my-code"), applyReferralCode: (uid, code) => request("POST", "/api/referrals/apply", { uid, code }),
   startSupportThread: (data) => request("POST", "/api/support/threads", data), mySupportThreads: () => request("GET", "/api/support/threads"), getSupportThread: (threadId) => request("GET", `/api/support/threads/${threadId}`), replySupportThread: (threadId, message) => request("POST", `/api/support/threads/${threadId}/messages`, { message }),
-  aiStatus: () => request("GET", "/api/ai/status"), aiInsights: () => request("GET", "/api/ai/insights"), aiChat: (message) => request("POST", "/api/ai/chat", { message })
+  aiStatus: () => request("GET", "/api/ai/status"), aiInsights: () => request("GET", "/api/ai/insights"), aiChat: (message) => request("POST", "/api/ai/chat", { message }),
+  setTransactionPin: (pin) => request("POST", "/api/security/transaction-pin/set", { pin }), verifyTransactionPin: (pin) => request("POST", "/api/security/transaction-pin/verify", { pin })
 };
