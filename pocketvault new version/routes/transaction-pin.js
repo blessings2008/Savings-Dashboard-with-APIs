@@ -1,9 +1,13 @@
 import express from 'express';
 import { requireAuth, asyncHandler, rateLimit } from '../core/middleware.js';
 import { db } from '../core/firebase.js';
-import { setTransactionPin, verifyTransactionPin, validateTransactionPin } from '../core/transaction-pin.js';
+import { setTransactionPin, verifyTransactionPin, validateTransactionPin, hasTransactionPin } from '../core/transaction-pin.js';
 
 const router = express.Router();
+
+router.get('/api/security/transaction-pin/status', requireAuth, asyncHandler(async (req, res) => {
+  res.json({ success: true, configured: await hasTransactionPin(req.user.uid) });
+}));
 
 router.post('/api/security/transaction-pin/set', requireAuth, rateLimit(10, 15 * 60 * 1000), asyncHandler(async (req, res) => {
   const pin = String(req.body?.pin || '');
@@ -21,7 +25,7 @@ router.post('/api/security/transaction-pin/set', requireAuth, rateLimit(10, 15 *
 
 router.post('/api/security/transaction-pin/verify', requireAuth, rateLimit(10, 15 * 60 * 1000), asyncHandler(async (req, res) => {
   const result = await verifyTransactionPin(req.user.uid, String(req.body?.pin || ''));
-  if (!result.ok) return res.status(result.code === 'PIN_LOCKED' ? 429 : 400).json({ success: false, ...result });
+  if (!result.ok) return res.status(result.code === 'PIN_LOCKED' ? 429 : result.code === 'PIN_NOT_SET' ? 428 : 400).json({ success: false, ...result });
   res.json({ success: true, verified: true });
 }));
 
