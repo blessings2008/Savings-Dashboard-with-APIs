@@ -10,7 +10,13 @@ function hashPin(pin, salt) {
 }
 
 export function validateTransactionPin(pin) {
-  return typeof pin === 'string' && /^\d{6}$/.test(pin);
+  return typeof pin === 'string' && new RegExp(`^\\d{${PIN_LENGTH}}$`).test(pin);
+}
+
+export async function hasTransactionPin(uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  const record = snap.data()?.transactionPin;
+  return Boolean(record?.hash && record?.salt);
 }
 
 export async function setTransactionPin(uid, pin) {
@@ -29,18 +35,39 @@ export async function verifyTransactionPin(uid, pin) {
   const data = snap.data() || {};
   const record = data.transactionPin;
   if (!record?.hash || !record?.salt) return { ok: false, code: 'PIN_NOT_SET', error: 'Set up your Transaction PIN before authorizing money movements.' };
-  if (record.lockedUntil && Date.now() < Number(record.lockedUntil)) {
-    const minutes = Math.max(1, Math.ceil((Number(record.lockedUntil) - Date.now()) / 60000));
+
+  const now = Date.now();
+  const lockedUntil = Number(record.lockedUntil || 0);
+  if (lockedUntil > now) {
+    const minutes = Math.max(1, Math.ceil((lockedUntil - now) / 60000));
     return { ok: false, code: 'PIN_LOCKED', error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` };
   }
+
   const candidate = hashPin(pin, record.salt);
-  const valid = crypto.timingSafeEqual(Buffer.from(candidate, 'hex'), Buffer.from(record.hash, 'hex'));
+  const stored = String(record.hash);
+  const valid = /^[0-9a-f]{128}$/i.test(stored) && crypto.timingSafeEqual(
+    Buffer.from(candidate, 'hex'),
+    Buffer.from(stored, 'hex')
+  );
+
   if (valid) {
     await ref.set({ transactionPin: { ...record, attempts: 0, lockedUntil: null, lastVerifiedAt: FieldValue.serverTimestamp() } }, { merge: true });
     return { ok: true };
   }
-  const attempts = Number(record.attempts || 0) + 1;
-  const lockedUntil = attempts >= MAX_ATTEMPTS ? Date.now() + LOCK_MINUTES * 60000 : null;
-  await ref.set({ transactionPin: { ...record, attempts, lockedUntil } }, { merge: true });
-  return { ok: false, code: lockedUntil ? 'PIN_LOCKED' : 'INVALID_PIN', error: lockedUntil ? `Too many failed attempts. Try again in ${LOCK_MINUTES} minutes.` : 'Incorrect Transaction PIN.' };
+
+  // Serialize the failure update so concurrent bad attempts cannot lose increments.
+  const result = await db.runTransaction(async tx => {
+    const latest = await tx.get(ref);
+    const latestRecord = latest.data()?.transactionPin;
+    if (!latestRecord?.hash || !latestRecord?.salt) return { attempts: MAX_ATTEMPTS, lockedUntil: now + LOCK_MINUTES * 60000 };
+    const latestLocked = Number(latestRecord.lockedUntil || 0);
+    if (latestLocked > Date.now()) return { attempts: Number(latestRecord.attempts || MAX_ATTEMPTS), lockedUntil: latestLocked };
+    const attempts = Number(latestRecord.attempts || 0) + 1;
+    const nextLockedUntil = attempts >= MAX_ATTEMPTS ? Date.now() + LOCK_MINUTES * 60000 : null;
+    tx.set(ref, { transactionPin: { ...latestRecord, attempts, lockedUntil: nextLockedUntil } }, { merge: true });
+    return { attempts, lockedUntil: nextLockedUntil };
+  });
+
+  if (result.lockedUntil) return { ok: false, code: 'PIN_LOCKED', error: `Too many failed attempts. Try again in ${LOCK_MINUTES} minutes.` };
+  return { ok: false, code: 'INVALID_PIN', error: 'Incorrect Transaction PIN.' };
 }
