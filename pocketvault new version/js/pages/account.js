@@ -82,6 +82,13 @@ export async function renderAccountPage(main, navigate) {
         </div>
       </div>
 
+      <div class="card" id="transaction-pin-card">
+        <div class="card-header"><div class="card-title">Transaction Security</div></div>
+        <p id="transaction-pin-status" style="font-size:13px;color:var(--muted);margin-bottom:14px">Checking your Transaction PIN status…</p>
+        <button class="btn btn-outline" id="transaction-pin-manage" style="width:100%">Manage Transaction PIN</button>
+        <div id="transaction-pin-error" class="auth-error" style="display:none;margin-top:10px"></div>
+      </div>
+
       <div class="card">
         <div class="card-header"><div class="card-title">Session</div></div>
         <button class="btn btn-danger" id="acc-signout" style="width:100%">Sign Out</button>
@@ -101,6 +108,7 @@ export async function renderAccountPage(main, navigate) {
 
   bindNavLinks(main, navigate);
   loadReferralCard(navigate);
+  loadTransactionPinCard();
 
   document.getElementById("acc-save").onclick = async () => {
     const name = document.getElementById("acc-name").value.trim();
@@ -321,6 +329,63 @@ async function loadReferralCard(navigate) {
   } catch (e) {
     body.innerHTML = `<p style="font-size:13px;color:var(--muted)">Couldn't load referral info right now.</p>`;
   }
+}
+
+async function loadTransactionPinCard() {
+  const statusEl = document.getElementById("transaction-pin-status");
+  const manageBtn = document.getElementById("transaction-pin-manage");
+  const errorEl = document.getElementById("transaction-pin-error");
+  if (!statusEl || !manageBtn) return;
+  try {
+    const status = await api.transactionPinStatus();
+    statusEl.textContent = status.configured
+      ? "Your Transaction PIN is active. It is required before withdrawals, transfers and merchant payments."
+      : "You have not set a Transaction PIN yet. You will need one before moving money.";
+    manageBtn.textContent = status.configured ? "Change Transaction PIN" : "Set Transaction PIN";
+    manageBtn.onclick = () => openTransactionPinManager(Boolean(status.configured));
+  } catch (e) {
+    statusEl.textContent = "Transaction PIN status could not be loaded.";
+    errorEl.style.display = "block";
+    errorEl.textContent = e.data?.error || e.message;
+    manageBtn.disabled = true;
+  }
+}
+
+function openTransactionPinManager(configured) {
+  const root = document.getElementById("modal-root");
+  root.innerHTML = \`<div class="modal">
+    <h3>\${configured ? "Change Transaction PIN" : "Set Transaction PIN"}</h3>
+    <p class="modal-sub">\${configured ? "Enter your current PIN, then choose a new 6-digit PIN." : "Choose a 6-digit PIN. Never share it with anyone, including PocketVault support."}</p>
+    \${configured ? \`<div class="input-group"><label class="input-label">Current PIN</label><input class="input" id="tp-current" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\\\d{6}" placeholder="6 digits"></div>\` : ""}
+    <div class="input-group"><label class="input-label">\${configured ? "New PIN" : "PIN"}</label><input class="input" id="tp-new" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\\\d{6}" placeholder="6 digits"></div>
+    <div class="input-group"><label class="input-label">Confirm PIN</label><input class="input" id="tp-confirm" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\\\d{6}" placeholder="6 digits"></div>
+    <div id="tp-error" class="auth-error" style="display:none"></div>
+    <div class="modal-actions"><button class="btn btn-outline" id="tp-cancel">Cancel</button><button class="btn btn-primary" id="tp-submit">\${configured ? "Change PIN" : "Set PIN"}</button></div>
+  </div>\`;
+  root.classList.add("open");
+  const close = () => root.classList.remove("open");
+  root.querySelector("#tp-cancel").onclick = close;
+  root.addEventListener("click", e => { if (e.target === root) close(); }, { once: true });
+  root.querySelector("#tp-submit").onclick = async () => {
+    const currentPin = root.querySelector("#tp-current")?.value || "";
+    const pin = root.querySelector("#tp-new").value || "";
+    const confirmPin = root.querySelector("#tp-confirm").value || "";
+    const err = root.querySelector("#tp-error");
+    if (!/^\\d{6}$/.test(pin)) { err.style.display="block"; err.textContent="PIN must be exactly 6 digits."; return; }
+    if (pin !== confirmPin) { err.style.display="block"; err.textContent="The PINs do not match."; return; }
+    if (configured && !/^\\d{6}$/.test(currentPin)) { err.style.display="block"; err.textContent="Enter your current 6-digit PIN."; return; }
+    const btn = root.querySelector("#tp-submit"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
+    try {
+      await api.setTransactionPin(pin, configured ? currentPin : undefined);
+      close();
+      toast(configured ? "Transaction PIN changed." : "Transaction PIN set.");
+      loadTransactionPinCard();
+    } catch (e) {
+      err.style.display="block"; err.textContent=e.data?.error || e.message;
+      btn.disabled=false; btn.textContent=configured ? "Change PIN" : "Set PIN";
+    }
+  };
+  setTimeout(() => root.querySelector(configured ? "#tp-current" : "#tp-new")?.focus(), 50);
 }
 
 function openKYCModal(phone, navigate) {
