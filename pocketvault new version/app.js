@@ -1,10 +1,7 @@
 // PocketVault app entry point.
 import { renderLogin, watchAuth } from "./auth.js";
 import { api } from "./api.js";
-import { getDeviceFingerprint } from "./js/core/fingerprint.js";
-import { renderEmailOtp } from "./js/core/email-otp.js";
 import { state } from "./js/core/state.js";
-import { renderShell } from "./js/shell.js";
 
 // Page modules are loaded on demand. This keeps one broken/unsupported page
 // from preventing the entire user app from booting.
@@ -49,23 +46,32 @@ async function navigate(page) {
 
 async function enterVerifiedSession(user) {
   state.user = user;
+  const [{ renderShell }, { getDeviceFingerprint }] = await Promise.all([
+    import("./js/shell.js"),
+    import("./js/core/fingerprint.js")
+  ]);
   renderShell(user, navigate);
-  // Dashboard loads the profile together with its other data. Do not fetch it
-  // a second time here; the duplicate request made sign-in noticeably slower.
   api.post("/api/profile", { uid: user.uid, deviceFingerprint: getDeviceFingerprint() }).catch(() => {});
   navigate("dashboard");
 }
 
+// Render the sign-in UI immediately. Do not leave the boot skeleton waiting
+// for Firebase/network state.
+renderLogin();
+
 watchAuth(async user => {
   try {
-    const status = await api.get("/api/auth/email-otp/status");
-    if (!status.verified) {
+    if (!user.emailVerified) {
+      const { renderEmailOtp } = await import("./js/core/email-otp.js");
       renderEmailOtp(user, enterVerifiedSession);
       return;
     }
     await enterVerifiedSession(user);
   } catch (error) {
-    console.error("Email verification check failed:", error);
-    renderEmailOtp(user, enterVerifiedSession);
+    console.error("Session startup failed:", error);
+    renderLogin();
   }
-}, () => { state.user = null; renderLogin(); });
+}, () => {
+  state.user = null;
+  renderLogin();
+});
