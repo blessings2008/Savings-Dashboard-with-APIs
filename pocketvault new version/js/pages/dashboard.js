@@ -11,22 +11,19 @@ import { openSaveModal, openWithdrawModal } from "./goals.js";
 import { openPayMerchantModal, openTransferModal } from "./merchant.js";
 
 export async function renderDashboardPage(main, navigate) {
-  // PRODUCTION FIX: previously only api.balance() was guarded with
-  // .catch() — if api.goals() or api.transactions() ever rejected
-  // (a transient network blip, a token refresh hiccup right after
-  // login), Promise.all() failed as a WHOLE, which should have shown
-  // the error screen in navigate()'s try/catch... but combined with
-  // fetch() having no timeout (see api.js), a genuine network hang
-  // meant this promise never resolved OR rejected — it just sat
-  // forever, which is the actual "loads forever" symptom. Every call
-  // is now individually guarded so one flaky request degrades
-  // gracefully instead of blocking the whole dashboard.
-  const [, , balanceRes, goalsRes, txRes] = await Promise.all([
-    loadPlan({ api, state, toast }).catch(() => null),
-    loadUserProfile({ api, state }).catch(() => null),
-    api.balance().catch(() => ({ balance: 0, mock: true })),
-    api.goals().catch(() => ({ goals: {} })),
-    api.transactions("?limit=5").catch(() => ({ transactions: [] })),
+  // Keep dashboard rendering independent from slow/unavailable services.
+  // Airtel balance, profile, plan, goals and transactions are useful data,
+  // but none of them should be allowed to hold the entire shell hostage.
+  const quick = (promise, fallback, ms = 2500) => Promise.race([
+    promise.catch(() => fallback),
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms))
+  ]);
+  const [profileRes, planRes, balanceRes, goalsRes, txRes] = await Promise.all([
+    quick(loadUserProfile({ api, state }), null),
+    quick(loadPlan({ api, state, toast }), null),
+    quick(api.balance(), { balance: 0, mock: true }),
+    quick(api.goals(), { goals: {} }),
+    quick(api.transactions("?limit=5"), { transactions: [] })
   ]);
 
   state.goals = goalsRes.goals || {};
