@@ -63,7 +63,7 @@ export async function renderDashboardPage(main, navigate) {
       <!-- Balance Hero Card -->
       <div class="balance-hero">
         <div class="balance-label">PocketVault Balance</div>
-        <div class="balance-amount">MWK <span>${fmt(state.user?.accountBalance || 0)}</span></div>
+        <div class="balance-amount">MWK <span>${fmt(state.user && state.user.accountBalance || 0)}</span></div>
         <div class="balance-meta">Airtel wallet: MWK ${fmt(balanceRes.balance)}${balanceRes.mock ? " (mock mode)" : ""}</div>
 
         <!-- IMPROVEMENT 1: Action buttons embedded in balance card as icon grid -->
