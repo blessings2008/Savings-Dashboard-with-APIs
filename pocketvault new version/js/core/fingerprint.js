@@ -36,7 +36,7 @@ function canvasHash() {
       hash = ((hash << 5) - hash + dataUrl.charCodeAt(i)) | 0;
     }
     return hash.toString(36);
-  } catch {
+  } catch (error) {
     return "canvas-error";
   }
 }
