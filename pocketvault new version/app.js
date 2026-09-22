@@ -1,23 +1,26 @@
 // PocketVault app entry point.
-import { auth } from "./firebase.js";
 import { renderLogin, watchAuth } from "./auth.js";
 import { api } from "./api.js";
 import { getDeviceFingerprint } from "./js/core/fingerprint.js";
 import { renderEmailOtp } from "./js/core/email-otp.js";
 import { state } from "./js/core/state.js";
 import { renderShell } from "./js/shell.js";
-import { renderDashboardPage } from "./js/pages/dashboard.js";
-import { renderGoalsPage } from "./js/pages/goals.js";
-import { renderAutosavePage } from "./js/pages/autosave.js";
-import { renderTransactionsPage } from "./js/pages/transactions.js";
-import { renderAnalyticsPage } from "./js/pages/analytics.js";
-import { renderAIPage } from "./js/pages/ai.js";
-import { renderNotificationsPage } from "./js/pages/notifications.js";
-import { renderMerchantPage } from "./js/pages/merchant.js";
-import { renderPremiumPage } from "./js/pages/premium.js";
-import { renderHelpPage, stopHelpPolling } from "./js/pages/help.js";
-import { renderAccountPage } from "./js/pages/account.js";
-import { loadUserProfile } from "./js/services/profile.js";
+
+// Page modules are loaded on demand. This keeps one broken/unsupported page
+// from preventing the entire user app from booting.
+const PAGE_LOADERS = {
+  dashboard: () => import("./js/pages/dashboard.js"),
+  goals: () => import("./js/pages/goals.js"),
+  autosave: () => import("./js/pages/autosave.js"),
+  transactions: () => import("./js/pages/transactions.js"),
+  analytics: () => import("./js/pages/analytics.js"),
+  ai: () => import("./js/pages/ai.js"),
+  notifications: () => import("./js/pages/notifications.js"),
+  merchant: () => import("./js/pages/merchant.js"),
+  premium: () => import("./js/pages/premium.js"),
+  help: () => import("./js/pages/help.js"),
+  account: () => import("./js/pages/account.js")
+};
 
 function setActiveNav(page) { document.querySelectorAll("[data-page]").forEach(el => el.classList.toggle("active", el.dataset.page === page)); }
 
@@ -27,20 +30,17 @@ async function navigate(page) {
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-skeleton"><div class="skel-stat-grid"><div class="skel skel-stat-box"></div><div class="skel skel-stat-box"></div><div class="skel skel-stat-box"></div><div class="skel skel-stat-box"></div></div><div class="skel skel-list-item"></div><div class="skel skel-list-item"></div></div>`;
   try {
-    switch (page) {
-      case "dashboard": await renderDashboardPage(main, navigate); break;
-      case "goals": await renderGoalsPage(main, navigate); break;
-      case "autosave": await renderAutosavePage(main, navigate); break;
-      case "transactions": await renderTransactionsPage(main, navigate); break;
-      case "analytics": await renderAnalyticsPage(main, navigate); break;
-      case "ai": await renderAIPage(main, navigate); break;
-      case "notifications": await renderNotificationsPage(main, navigate); break;
-      case "merchant": await renderMerchantPage(main, navigate); break;
-      case "premium": await renderPremiumPage(main, navigate); break;
-      case "help": await renderHelpPage(main, navigate); break;
-      case "account": await renderAccountPage(main, navigate); break;
-      default: main.innerHTML = `<div class="empty-state"><p>Page not found</p></div>`;
+    const loader = PAGE_LOADERS[page];
+    if (!loader) {
+      main.innerHTML = `<div class="empty-state"><p>Page not found</p></div>`;
+      return;
     }
+    const module = await loader();
+    const render = module[`render${page.charAt(0).toUpperCase() + page.slice(1)}Page`];
+    if (typeof render !== "function") {
+      throw new Error(`The ${page} page could not be loaded.`);
+    }
+    await render(main, navigate);
   } catch (err) {
     console.error(err);
     main.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${err.message || "Something went wrong"}</p><button class="btn btn-outline" onclick="location.reload()">Reload</button></div>`;
