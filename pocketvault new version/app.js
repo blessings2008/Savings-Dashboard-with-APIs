@@ -61,14 +61,23 @@ async function enterVerifiedSession(user) {
   ]);
   renderShell(user, navigate);
   api.post("/api/profile", { uid: user.uid, deviceFingerprint: getDeviceFingerprint() }).catch(() => {});
-  navigate("dashboard");
+  await navigate("dashboard");
 }
 
-// Render the sign-in UI immediately. Do not leave the boot skeleton waiting
-// for Firebase/network state.
-renderLogin();
+// Keep the HTML boot skeleton visible until Firebase has resolved the initial
+// auth state. Rendering the sign-in page immediately caused a visible
+// sign-in -> dashboard flash on every reload for returning users.
+let authResolved = false;
+const authFallback = setTimeout(() => {
+  if (!authResolved) {
+    console.warn("Auth initialization is taking longer than expected.");
+    renderLogin();
+  }
+}, 8000);
 
 watchAuth(async user => {
+  authResolved = true;
+  clearTimeout(authFallback);
   try {
     if (!user.emailVerified) {
       const { renderEmailOtp } = await import("./js/core/email-otp.js");
@@ -81,6 +90,8 @@ watchAuth(async user => {
     renderLogin();
   }
 }, () => {
+  authResolved = true;
+  clearTimeout(authFallback);
   state.user = null;
   renderLogin();
 });
