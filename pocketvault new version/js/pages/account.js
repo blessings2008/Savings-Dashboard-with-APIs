@@ -305,7 +305,7 @@ async function loadReferralCard(navigate) {
     document.getElementById("ref-share-btn").onclick = async () => {
       if (navigator.share) {
         try { await navigator.share({ title: "PocketVault", text: shareText, url: shareUrl }); }
-        catch {} // user cancelled share sheet — not an error
+        catch (error) {} // user cancelled share sheet — not an error
       } else {
         navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
         toast("Share message copied to clipboard!");
