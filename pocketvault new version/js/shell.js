@@ -25,7 +25,7 @@ export async function fetchUnreadCount() {
         badge.remove();
       }
     });
-  } catch {
+  } catch (error) {
     // Background badge update; do not interrupt the app when it fails.
   }
 }
