@@ -353,15 +353,15 @@ async function loadTransactionPinCard() {
 
 function openTransactionPinManager(configured) {
   const root = document.getElementById("modal-root");
-  root.innerHTML = \`<div class="modal">
-    <h3>\${configured ? "Change Transaction PIN" : "Set Transaction PIN"}</h3>
-    <p class="modal-sub">\${configured ? "Enter your current PIN, then choose a new 6-digit PIN." : "Choose a 6-digit PIN. Never share it with anyone, including PocketVault support."}</p>
-    \${configured ? \`<div class="input-group"><label class="input-label">Current PIN</label><input class="input" id="tp-current" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\\\d{6}" placeholder="6 digits"></div>\` : ""}
-    <div class="input-group"><label class="input-label">\${configured ? "New PIN" : "PIN"}</label><input class="input" id="tp-new" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\\\d{6}" placeholder="6 digits"></div>
-    <div class="input-group"><label class="input-label">Confirm PIN</label><input class="input" id="tp-confirm" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\\\d{6}" placeholder="6 digits"></div>
+  root.innerHTML = `<div class="modal">
+    <h3>${configured ? "Change Transaction PIN" : "Set Transaction PIN"}</h3>
+    <p class="modal-sub">${configured ? "Enter your current PIN, then choose a new 6-digit PIN." : "Choose a 6-digit PIN. Never share it with anyone, including PocketVault support."}</p>
+    ${configured ? `<div class="input-group"><label class="input-label">Current PIN</label><input class="input" id="tp-current" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\d{6}" placeholder="6 digits"></div>` : ""}
+    <div class="input-group"><label class="input-label">${configured ? "New PIN" : "PIN"}</label><input class="input" id="tp-new" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\d{6}" placeholder="6 digits"></div>
+    <div class="input-group"><label class="input-label">Confirm PIN</label><input class="input" id="tp-confirm" type="password" inputmode="numeric" autocomplete="off" maxlength="6" pattern="\\d{6}" placeholder="6 digits"></div>
     <div id="tp-error" class="auth-error" style="display:none"></div>
-    <div class="modal-actions"><button class="btn btn-outline" id="tp-cancel">Cancel</button><button class="btn btn-primary" id="tp-submit">\${configured ? "Change PIN" : "Set PIN"}</button></div>
-  </div>\`;
+    <div class="modal-actions"><button class="btn btn-outline" id="tp-cancel">Cancel</button><button class="btn btn-primary" id="tp-submit">${configured ? "Change PIN" : "Set PIN"}</button></div>
+  </div>`;
   root.classList.add("open");
   const close = () => root.classList.remove("open");
   root.querySelector("#tp-cancel").onclick = close;
