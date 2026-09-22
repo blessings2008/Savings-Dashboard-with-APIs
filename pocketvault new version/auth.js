@@ -12,7 +12,6 @@ import {
   browserLocalPersistence,
   sendPasswordResetEmail
 } from "./firebase.js";
-import { getDeviceFingerprint } from "./js/core/fingerprint.js";
 
 const GOOGLE_SVG = `<svg width="18" height="18" viewBox="0 0 48 48">
   <path fill="#FFC107" d="M43.6 20.5h-1.9V20.4H24v7.2h11.3c-1.6 4.6-6 7.9-11.3 7.9-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.1-5.1C33.6 5.5 29 3.6 24 3.6 12.9 3.6 4 12.5 4 23.6S12.9 43.6 24 43.6c10.5 0 19.5-7.6 19.5-19.6 0-1.2-.1-2.3-.3-3.5z"/>
@@ -351,9 +350,10 @@ export function renderLogin() {
     btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Creating account...`;
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      // Save display name + device fingerprint (referral abuse
-      // detection only — see js/core/fingerprint.js for scope/limits)
+      // Profile setup is non-blocking for account creation. Load the fingerprint
+      // helper only when it is actually needed.
       try {
+        const { getDeviceFingerprint } = await import("./js/core/fingerprint.js");
         await fetch("/api/profile", {
           method: "POST",
           headers: {
