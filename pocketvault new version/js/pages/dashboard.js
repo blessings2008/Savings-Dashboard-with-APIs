@@ -39,9 +39,9 @@ export async function renderDashboardPage(main, navigate) {
       <div class="dash-greeting">
         <div>
           <div class="dash-greeting-sub">Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"},</div>
-          <div class="dash-greeting-name">${(auth.currentUser.displayName || auth.currentUser.email || "there").split("@")[0]} 👋</div>
+          <div class="dash-greeting-name">${((auth.currentUser && auth.currentUser.displayName) || (auth.currentUser && auth.currentUser.email) || "there").split("@")[0]} 👋</div>
         </div>
-        ${state.user?.streakCount > 0 ? `
+        ${state.user && state.user.streakCount > 0 ? `
           <div class="streak-badge" title="${state.user.streakCount} consecutive weeks with a save">
             <span class="streak-fire">🔥</span>
             <span class="streak-count">${state.user.streakCount}</span>
@@ -50,7 +50,7 @@ export async function renderDashboardPage(main, navigate) {
         ` : ""}
       </div>
 
-      ${state.user?.kycStatus !== "verified" && state.user?.kycStatus !== "mock_verified" ? `
+      ${state.user && state.user.kycStatus !== "verified" && state.user && state.user.kycStatus !== "mock_verified" ? `
         <div class="kyc-banner" id="kyc-banner-btn">
           <span style="font-size:20px">⚠️</span>
           <div>
@@ -101,12 +101,12 @@ export async function renderDashboardPage(main, navigate) {
         </div>
         <div class="stat">
           <div class="stat-label">Fee Rate</div>
-          <div class="stat-value">${state.planConfig?.transactionFeePercent ?? 1}%</div>
+          <div class="stat-value">${state.planConfig && state.planConfig.transactionFeePercent != null ? state.planConfig.transactionFeePercent : 1}%</div>
           <div class="stat-sub">per transaction</div>
         </div>
         <div class="stat">
           <div class="stat-label">Goals Max</div>
-          <div class="stat-value">${activeGoals.length}/${state.planConfig?.maxGoals ?? 2}</div>
+          <div class="stat-value">${activeGoals.length}/${state.planConfig && state.planConfig.maxGoals != null ? state.planConfig.maxGoals : 2}</div>
           <div class="stat-sub">active</div>
         </div>
       </div>
