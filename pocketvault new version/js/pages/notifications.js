@@ -17,7 +17,7 @@ export async function renderNotificationsPage(main) {
   try {
     await api.post("/api/notifications/read-all", {});
     fetchUnreadCount();
-  } catch {}
+  } catch (error) {}
   const res = await api.notifications();
   const notifs = res.notifications || [];
 
@@ -37,7 +37,7 @@ export async function renderNotificationsPage(main) {
     el.addEventListener("click", async () => {
       if (el.classList.contains("unread")) {
         el.classList.remove("unread");
-        try { await api.markNotificationRead(el.dataset.notif); } catch {}
+        try { await api.markNotificationRead(el.dataset.notif); } catch (error) {}
       }
     });
   });
