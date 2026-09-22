@@ -50,7 +50,8 @@ async function navigate(page) {
 async function enterVerifiedSession(user) {
   state.user = user;
   renderShell(user, navigate);
-  loadUserProfile({ api, state }).then(() => { if (state.currentPage === "dashboard") navigate("dashboard"); });
+  // Dashboard loads the profile together with its other data. Do not fetch it
+  // a second time here; the duplicate request made sign-in noticeably slower.
   api.post("/api/profile", { uid: user.uid, deviceFingerprint: getDeviceFingerprint() }).catch(() => {});
   navigate("dashboard");
 }
