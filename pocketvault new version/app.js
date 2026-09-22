@@ -36,7 +36,7 @@ async function navigate(page) {
       return;
     }
     const module = await loader();
-    const render = module[`render${page.charAt(0).toUpperCase() + page.slice(1)}Page`];
+    const renderNames = { dashboard: "renderDashboardPage", goals: "renderGoalsPage", autosave: "renderAutosavePage", transactions: "renderTransactionsPage", analytics: "renderAnalyticsPage", ai: "renderAIPage", notifications: "renderNotificationsPage", merchant: "renderMerchantPage", premium: "renderPremiumPage", help: "renderHelpPage", account: "renderAccountPage" };\n    const render = module[renderNames[page]];
     if (typeof render !== "function") {
       throw new Error(`The ${page} page could not be loaded.`);
     }
