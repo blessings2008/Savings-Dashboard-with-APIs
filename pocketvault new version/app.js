@@ -22,7 +22,15 @@ const PAGE_LOADERS = {
 function setActiveNav(page) { document.querySelectorAll("[data-page]").forEach(el => el.classList.toggle("active", el.dataset.page === page)); }
 
 async function navigate(page) {
-  if (page !== "help") stopHelpPolling();
+  // Help owns its polling lifecycle. Stop it only when leaving Help.
+  if (page !== "help" && state.currentPage === "help") {
+    try {
+      const helpModule = await import("./js/pages/help.js");
+      helpModule.stopHelpPolling();
+    } catch (error) {
+      console.warn("Could not stop Help polling:", error);
+    }
+  }
   state.currentPage = page; setActiveNav(page);
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-skeleton"><div class="skel-stat-grid"><div class="skel skel-stat-box"></div><div class="skel skel-stat-box"></div><div class="skel skel-stat-box"></div><div class="skel skel-stat-box"></div></div><div class="skel skel-list-item"></div><div class="skel skel-list-item"></div></div>`;
