@@ -362,7 +362,7 @@ export function renderLogin() {
           },
           body: JSON.stringify({ uid: cred.user.uid, name, deviceFingerprint: getDeviceFingerprint() })
         });
-      } catch {}
+      } catch (error) {}
     } catch (e) {
       const map = {
         "auth/email-already-in-use": "An account with this email already exists. Sign in instead.",
@@ -385,7 +385,7 @@ export function renderLogin() {
     }
     try {
       await setPersistence(auth, browserLocalPersistence);
-    } catch {}
+    } catch (error) {}
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (e) {
@@ -393,7 +393,7 @@ export function renderLogin() {
       if (["auth/popup-blocked","auth/popup-closed-by-user",
            "auth/operation-not-supported-in-this-environment",
            "auth/disallowed-useragent"].includes(code)) {
-        try { await signInWithRedirect(auth, googleProvider); } catch {
+        try { await signInWithRedirect(auth, googleProvider); } catch (error) {
           showError("Google sign-in isn't supported in this browser. Try Chrome or Safari.");
         }
       } else if (code !== "auth/cancelled-popup-request") {
