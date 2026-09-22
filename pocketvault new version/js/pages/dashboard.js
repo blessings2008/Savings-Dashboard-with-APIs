@@ -201,9 +201,9 @@ export async function renderDashboardPage(main, navigate) {
   `;
 
   bindNavLinks(main, navigate);
-  document.getElementById("kyc-banner-btn")?.addEventListener("click", () => navigate("account"));
+  document.getElementById("kyc-banner-btn") && document.getElementById("kyc-banner-btn").addEventListener("click", () => navigate("account"));
   document.getElementById("btn-save-quick").onclick = () => openSaveModal(undefined, navigate);
   document.getElementById("btn-withdraw-quick").onclick = () => openWithdrawModal(undefined, navigate);
-  document.getElementById("qa-pay-merchant")?.addEventListener("click", () => openPayMerchantModal(navigate));
-  document.getElementById("qa-transfer")?.addEventListener("click", () => openTransferModal(navigate));
+  document.getElementById("qa-pay-merchant") && document.getElementById("qa-pay-merchant").addEventListener("click", () => openPayMerchantModal(navigate));
+  document.getElementById("qa-transfer") && document.getElementById("qa-transfer").addEventListener("click", () => openTransferModal(navigate));
 }
