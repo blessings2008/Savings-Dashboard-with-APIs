@@ -97,9 +97,8 @@ export function openPayMerchantModal(navigate) {
           <input class="input" id="pm-amount" type="number" placeholder="e.g. 5000" min="100">
         </div>
 
-        <div class="input-group">
-          <label class="input-label">Airtel Money number</label>
-          <input class="input" id="pm-phone" type="tel" placeholder="e.g. 0991234567" value="${state.user.phone || state.user.profilePhone || ""}" ${state.user.phone ? "readonly" : ""}>
+        <div class="modal-info">
+          Verified Airtel Money number: <strong>${escapeHTML(state.user.phone || state.user.profilePhone || "Not available")}</strong>
         </div>
 
         <div id="pm-amount-error" class="auth-error" style="display:none"></div>
@@ -119,17 +118,15 @@ export function openPayMerchantModal(navigate) {
 
     root.querySelector("#pm-pay").onclick = async () => {
       const amount = document.getElementById("pm-amount").value;
-      const phone = document.getElementById("pm-phone").value.trim();
       const errBox = document.getElementById("pm-amount-error");
       const btn = root.querySelector("#pm-pay");
 
       if (!amount || parseFloat(amount) < 100) return showModalError(errBox, "Minimum payment is MWK 100");
-      if (!/^(0[89][0-9]{8}|265[89][0-9]{8})$/.test(phone)) return showModalError(errBox, "Enter a valid Malawi Airtel number");
 
       if (btn.disabled) return;
       btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
       try {
-        const res = await api.payMerchant(state.user.uid, { merchantCode: code, amount, phone, idempotencyKey });
+        const res = await api.payMerchant(state.user.uid, { merchantCode: code, amount, idempotencyKey });
         closeModal();
         toast(res.message || "Payment sent!");
         navigate(state.currentPage);
