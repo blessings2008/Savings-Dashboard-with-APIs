@@ -358,9 +358,8 @@ export function openSaveModal(preselectGoalId, navigate) {
         <input class="input" id="save-amount" type="number" placeholder="e.g. 5000" min="100">
       </div>
 
-      <div class="input-group">
-        <label class="input-label">Airtel Money number</label>
-        <input class="input" id="save-phone" type="tel" placeholder="e.g. 0991234567" value="${state.user.phone || state.user.profilePhone || ""}" ${state.user.phone ? "readonly" : ""}>
+      <div class="modal-info">
+        Verified Airtel Money number: <strong>${escapeHTML(state.user.phone || state.user.profilePhone || "Not available")}</strong>
       </div>
 
       <div id="save-error" class="auth-error" style="display:none"></div>
@@ -381,12 +380,10 @@ export function openSaveModal(preselectGoalId, navigate) {
 
   root.querySelector("#save-submit").onclick = async () => {
     const amount = document.getElementById("save-amount").value;
-    const phone = document.getElementById("save-phone").value.trim();
     const errBox = document.getElementById("save-error");
     const btn = root.querySelector("#save-submit");
 
     if (!amount || parseFloat(amount) < 100) return showModalError(errBox, "Minimum save is MWK 100");
-    if (!/^(0[89][0-9]{8}|265[89][0-9]{8})$/.test(phone)) return showModalError(errBox, "Enter a valid Malawi Airtel number");
 
     // Belt-and-braces: disable immediately so even a very fast
     // double-click before the network request starts can't fire
@@ -395,7 +392,7 @@ export function openSaveModal(preselectGoalId, navigate) {
     if (btn.disabled) return;
     btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
     try {
-      const res = await api.save(state.user.uid, { amount, phone, idempotencyKey });
+      const res = await api.save(state.user.uid, { amount, idempotencyKey });
       closeModal();
       toast(res.message || "Added to your balance!");
       navigate(state.currentPage);
@@ -439,9 +436,8 @@ export function openWithdrawModal(preselectGoalId, navigate) {
         <input class="input" id="wd-amount" type="number" placeholder="e.g. 5000" min="100">
       </div>
 
-      <div class="input-group">
-        <label class="input-label">Airtel Money number</label>
-        <input class="input" id="wd-phone" type="tel" placeholder="e.g. 0991234567" value="${state.user.phone || state.user.profilePhone || ""}" ${state.user.phone ? "readonly" : ""}>
+      <div class="modal-info">
+        Verified Airtel Money number: <strong>${escapeHTML(state.user.phone || state.user.profilePhone || "Not available")}</strong>
       </div>
 
       <div id="wd-error" class="auth-error" style="display:none"></div>
@@ -482,18 +478,16 @@ export function openWithdrawModal(preselectGoalId, navigate) {
 
   root.querySelector("#wd-submit").onclick = async () => {
     const amount = document.getElementById("wd-amount").value;
-    const phone = document.getElementById("wd-phone").value.trim();
     const errBox = document.getElementById("wd-error");
     const btn = root.querySelector("#wd-submit");
 
     if (!amount || parseFloat(amount) < 100) return showModalError(errBox, "Minimum withdrawal is MWK 100");
     if (parseFloat(amount) > available) return showModalError(errBox, `Only MWK ${fmt(available)} available`);
-    if (!/^(0[89][0-9]{8}|265[89][0-9]{8})$/.test(phone)) return showModalError(errBox, "Enter a valid Malawi Airtel number");
 
     if (btn.disabled) return;
     btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
     try {
-      const res = await api.withdraw(state.user.uid, { amount, phone, idempotencyKey });
+      const res = await api.withdraw(state.user.uid, { amount, idempotencyKey });
       closeModal();
       toast(res.message || "Withdrawal sent!");
       navigate(state.currentPage);
