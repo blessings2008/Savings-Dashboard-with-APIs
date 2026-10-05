@@ -1220,7 +1220,8 @@ router.post('/api/goals/:goalId/allocate',
 // sitting in a "done" goal with a flag and nothing else.
 // Frozen goals: blocked, same as everywhere else — a subscription-
 // expiry freeze stops money moving in either direction.
-// Body: { uid, amount }
+// Body: { uid, idempotencyKey }
+// The full saved amount is moved atomically and the goal is deleted.
 // ----------------------------
 router.post('/api/goals/:goalId/deallocate',
   requireAuth,
@@ -1238,10 +1239,7 @@ router.post('/api/goals/:goalId/deallocate',
       let goalName = 'Savings goal';
 
       await db.runTransaction(async transaction => {
-        const [goalSnap, userSnap] = await Promise.all([
-          transaction.get(goalRef),
-          transaction.get(userRef)
-        ]);
+        const goalSnap = await transaction.get(goalRef);
         const goal = goalSnap.data();
         if (!goal) {
           const err = new Error('Goal not found');
