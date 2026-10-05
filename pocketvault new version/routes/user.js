@@ -28,6 +28,18 @@ import {
 import { unfreezeGoalsOnRenewal } from '../jobs.js';
 
 const router = express.Router();
+// Resolve the only phone number that money-moving endpoints may use.
+// The client is never trusted for this value: it must come from the
+// authenticated user's Firestore profile and the KYC record must be verified.
+async function requireKycPhone(uid) {
+  const snap = await db.collection('users').doc(uid).get();
+  const user = snap.data() || {};
+  if (!user.phone) return null;
+  const isVerified = user.kycStatus === 'verified' || user.kycStatus === 'mock_verified';
+  if (!isVerified) return null;
+  return user.phone;
+}
+
 
 router.get('/api/health', asyncHandler(async (req, res) => {
   let dbHealthy = true;
@@ -891,9 +903,13 @@ router.post('/api/save',
   requireAuth,
   requireOwnData,
   asyncHandler(async (req, res) => {
-    const { uid, amount, phone, idempotencyKey } = req.body;
-    if (!amount || !phone) {
-      return res.status(400).json({ success: false, error: 'amount, phone required' });
+    const { uid, amount, idempotencyKey } = req.body;
+    if (!amount) {
+      return res.status(400).json({ success: false, error: 'amount required' });
+    }
+    const phone = await requireKycPhone(uid);
+    if (!phone) {
+      return res.status(403).json({ success: false, error: 'Verify your phone number before saving money' });
     }
     const parsedAmount = parseAmount(amount);
     if (parsedAmount === null) {
@@ -997,9 +1013,13 @@ router.post('/api/withdraw',
   requireAuth,
   requireOwnData,
   asyncHandler(async (req, res) => {
-    const { uid, amount, phone, idempotencyKey } = req.body;
-    if (!amount || !phone) {
-      return res.status(400).json({ success: false, error: 'amount, phone required' });
+    const { uid, amount, idempotencyKey } = req.body;
+    if (!amount) {
+      return res.status(400).json({ success: false, error: 'amount required' });
+    }
+    const phone = await requireKycPhone(uid);
+    if (!phone) {
+      return res.status(403).json({ success: false, error: 'Verify your phone number before withdrawing money' });
     }
     const parsedAmount = parseAmount(amount);
     if (parsedAmount === null) {
@@ -1207,55 +1227,90 @@ router.post('/api/goals/:goalId/deallocate',
   requireOwnData,
   asyncHandler(async (req, res) => {
     const { goalId } = req.params;
-    const { uid, amount, idempotencyKey } = req.body;
-    if (!amount) {
-      return res.status(400).json({ success: false, error: 'amount required' });
-    }
-    const parsedAmount = parseAmount(amount);
-    if (parsedAmount === null) {
-      return res.status(400).json({ success: false, error: 'Enter a valid amount' });
-    }
-
-    const goalSnap = await db.collection('goals').doc(goalId).get();
-    const goal = goalSnap.data();
-    if (!goal) return res.status(404).json({ success: false, error: 'Goal not found' });
-    if (goal.uid !== uid) return res.status(403).json({ success: false, error: 'Forbidden' });
-    if (goal.frozen) {
-      return res.status(400).json({
-        success: false,
-        error: 'This goal is frozen because your subscription expired. Unlock it or renew first.',
-        frozen: true
-      });
-    }
-    if (goal.lockType === 'hard' && !goal.completed) {
-      return res.status(400).json({
-        success: false,
-        error: 'This goal is locked until it reaches its target — you can move funds back to your balance once it\'s complete.'
-      });
-    }
-    if (parsedAmount > (goal.saved || 0)) {
-      return res.status(400).json({ success: false, error: `Only MWK ${(goal.saved || 0).toLocaleString()} saved in this goal` });
-    }
+    const { uid, idempotencyKey } = req.body;
 
     const outcome = await withIdempotency(uid, idempotencyKey, async () => {
-      await db.collection('users').doc(uid).set({
-        accountBalance: FieldValue.increment(parsedAmount)
-      }, { merge: true });
-      const updated = await updateGoalProgress(uid, goalId, -parsedAmount);
+      const goalRef = db.collection('goals').doc(goalId);
+      const userRef = db.collection('users').doc(uid);
+      const txRef = db.collection('transactions').doc();
       const reference = generateRef();
-      await logTransaction(uid, {
-        type: 'deallocation', amount: parsedAmount, fee: 0,
-        goalId, goalName: goal.name, reference, status: 'completed'
+      let deallocated = 0;
+      let goalName = 'Savings goal';
+
+      await db.runTransaction(async transaction => {
+        const [goalSnap, userSnap] = await Promise.all([
+          transaction.get(goalRef),
+          transaction.get(userRef)
+        ]);
+        const goal = goalSnap.data();
+        if (!goal) {
+          const err = new Error('Goal not found');
+          err.statusCode = 404;
+          throw err;
+        }
+        if (goal.uid !== uid) {
+          const err = new Error('Forbidden');
+          err.statusCode = 403;
+          throw err;
+        }
+        if (goal.frozen) {
+          const err = new Error('This goal is frozen because your subscription expired. Unlock it or renew first.');
+          err.statusCode = 400;
+          throw err;
+        }
+        if (goal.lockType === 'hard' && !goal.completed) {
+          const err = new Error('This goal is locked until it reaches its target — you can move funds back to your balance once it is complete.');
+          err.statusCode = 400;
+          throw err;
+        }
+        deallocated = Number(goal.saved || 0);
+        goalName = goal.name || goalName;
+        if (deallocated <= 0) {
+          const err = new Error('Nothing saved in this goal yet');
+          err.statusCode = 400;
+          throw err;
+        }
+
+        transaction.set(userRef, {
+          accountBalance: FieldValue.increment(deallocated),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(txRef, {
+          uid,
+          type: 'deallocation',
+          amount: deallocated,
+          goalId,
+          goalName,
+          reference,
+          status: 'completed',
+          timestamp: FieldValue.serverTimestamp()
+        });
+        transaction.delete(goalRef);
       });
-      await pushNotification(uid, {
-        type: 'goal_deallocation',
-        message: `💰 Moved MWK ${parsedAmount.toLocaleString()} from ${goal.name} back to your account balance.`
-      });
-      clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
-      return { success: true, message: `MWK ${parsedAmount} moved to your balance`, reference, goal: updated };
+
+      return {
+        success: true,
+        goalDeleted: true,
+        amount: deallocated,
+        reference,
+        message: 'MWK ' + deallocated.toLocaleString() + ' moved from ' + goalName + ' to your account balance.'
+      };
+    }).catch(err => {
+      if (err.statusCode) return { success: false, error: err.message, _statusCode: err.statusCode };
+      throw err;
     });
 
-    res.json(outcome);
+    const statusCode = outcome._statusCode || 200;
+    delete outcome._statusCode;
+    if (statusCode === 200) {
+      try {
+        await pushNotification(uid, { type: 'goal_deallocation', message: outcome.message });
+      } catch (e) {
+        logSystemError('goal_deallocation_notification', e.message, { uid, goalId, stack: e.stack });
+      }
+      clearCache('profile_' + uid, 'goals_' + uid, 'analytics_' + uid);
+    }
+    res.status(statusCode).json(outcome);
   })
 );
 
@@ -1439,9 +1494,13 @@ router.post('/api/roundup',
   requireOwnData,
   requirePlan('pro', 'business'),
   asyncHandler(async (req, res) => {
-    const { uid, spendAmount, phone, destination, goalId } = req.body;
-    if (!spendAmount || !phone) {
-      return res.status(400).json({ success: false, error: 'spendAmount, phone required' });
+    const { uid, spendAmount, destination, goalId } = req.body;
+    if (!spendAmount) {
+      return res.status(400).json({ success: false, error: 'spendAmount required' });
+    }
+    const phone = await requireKycPhone(uid);
+    if (!phone) {
+      return res.status(403).json({ success: false, error: 'Verify your phone number before using round-up' });
     }
     const resolvedDestination = destination === 'goal' ? 'goal' : 'balance';
     if (resolvedDestination === 'goal' && !goalId) {
@@ -1678,9 +1737,13 @@ router.post('/api/merchant/pay',
   requireAuth,
   requireOwnData,
   asyncHandler(async (req, res) => {
-    const { uid, merchantCode, amount, phone, idempotencyKey } = req.body;
-    if (!merchantCode || !amount || !phone) {
-      return res.status(400).json({ success: false, error: 'merchantCode, amount and phone required' });
+    const { uid, merchantCode, amount, idempotencyKey } = req.body;
+    if (!merchantCode || !amount) {
+      return res.status(400).json({ success: false, error: 'merchantCode and amount required' });
+    }
+    const phone = await requireKycPhone(uid);
+    if (!phone) {
+      return res.status(403).json({ success: false, error: 'Verify your phone number before paying a merchant' });
     }
     if (!/^\d{5}$/.test(merchantCode)) {
       return res.status(400).json({ success: false, error: 'Invalid merchant code format' });
