@@ -581,33 +581,35 @@ function openDeallocateModal(goalId, navigate) {
     toast("Nothing saved in this goal yet", "error");
     return;
   }
+  if (goal.frozen) {
+    toast("This goal is frozen — renew or unlock it first", "error");
+    return;
+  }
   if (goal.lockType === "hard" && !goal.completed) {
-    toast("This goal is locked until it reaches its target", "error");
+    toast("This goal is locked until it reaches the target", "error");
     return;
   }
 
   const idempotencyKey = crypto.randomUUID();
-
   const root = document.getElementById("modal-root");
   root.innerHTML = `
     <div class="modal">
-      <h3>Move from "${escapeHTML(goal.name)}" to Balance</h3>
-      <p class="modal-sub">Move money from this goal back to your account balance — no fee, instant.</p>
+      <h3>Close "${escapeHTML(goal.name)}" and move funds</h3>
+      <p class="modal-sub">This moves the entire saved amount back to your PocketVault balance and permanently closes the goal.</p>
 
       <div class="modal-info" style="margin-bottom:14px">
         Saved in this goal: <strong>MWK ${fmt(available)}</strong>
       </div>
 
-      <div class="input-group">
-        <label class="input-label">Amount (MWK)</label>
-        <input class="input" id="dealloc-amount" type="number" placeholder="e.g. 5000" min="1" max="${available}">
-      </div>
-
       <div id="dealloc-error" class="auth-error" style="display:none"></div>
+
+      <div class="modal-info" style="border-color:var(--danger,#b42318);margin-top:12px">
+        This cannot be undone. The goal will be deleted after the funds are moved.
+      </div>
 
       <div class="modal-actions">
         <button class="btn btn-outline" id="dealloc-cancel">Cancel</button>
-        <button class="btn btn-primary" id="dealloc-submit">Move to Balance</button>
+        <button class="btn btn-primary" id="dealloc-submit">Move MWK ${fmt(available)} to Balance</button>
       </div>
     </div>
   `;
@@ -616,17 +618,12 @@ function openDeallocateModal(goalId, navigate) {
   root.addEventListener("click", e => { if (e.target === root) closeModal(); });
 
   root.querySelector("#dealloc-submit").onclick = async () => {
-    const amount = document.getElementById("dealloc-amount").value;
     const errBox = document.getElementById("dealloc-error");
     const btn = root.querySelector("#dealloc-submit");
-
-    if (!amount || parseFloat(amount) <= 0) return showModalError(errBox, "Enter a valid amount");
-    if (parseFloat(amount) > available) return showModalError(errBox, `Only MWK ${fmt(available)} saved in this goal`);
-
     if (btn.disabled) return;
     btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
     try {
-      const res = await api.deallocate(state.user.uid, goalId, { amount, idempotencyKey });
+      const res = await api.deallocate(state.user.uid, goalId, { idempotencyKey });
       closeModal();
       toast(res.message || "Moved to your balance!");
       navigate(state.currentPage);
