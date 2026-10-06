@@ -756,6 +756,18 @@ async function executeAutosaveCollection(rule, user, amountToSave, notifyMessage
       }
     }
 
+    // Background auto-save is a money-moving path too. Never charge an
+    // unverified account, even if an old rule remains enabled after a
+    // profile/KYC change. The server-side KYC record is authoritative.
+    const kycVerified = user.kycStatus === 'verified' || user.kycStatus === 'mock_verified';
+    const kycPhone = user.phone || null;
+    if (!kycVerified || !kycPhone) {
+      await db.collection('autosave_rules').doc(rule.id).update({
+        lastRun: FieldValue.serverTimestamp(), lastRunResult: 'skipped_kyc_not_verified'
+      }).catch(() => {});
+      return false;
+    }
+
     const { plan, config } = await getPlanConfig(rule.uid);
     const fee = calcFee(amountToSave, config.transactionFeePercent);
     const reference = generateRef();
@@ -764,7 +776,7 @@ async function executeAutosaveCollection(rule, user, amountToSave, notifyMessage
     if (isMockMode()) {
       succeeded = true;
     } else {
-      const result = await airtelCollect({ phone: user.phone, amount: amountToSave, reference });
+      const result = await airtelCollect({ phone: kycPhone, amount: amountToSave, reference });
       succeeded = isAirtelSuccess(result);
     }
 
@@ -790,7 +802,7 @@ async function executeAutosaveCollection(rule, user, amountToSave, notifyMessage
     const txId = await logTransaction(rule.uid, {
       type: 'savings', amount: amountToSave, fee: fee.total, feePercent: config.transactionFeePercent,
       goalId: toGoal ? rule.goalId : null, goalName: toGoal ? goal.name : null, reference,
-      status: isMockMode() ? 'mock' : 'completed', phone: user.phone, plan,
+      status: isMockMode() ? 'mock' : 'completed', phone: kycPhone, plan,
       source: 'autosave_rule', ruleId: rule.id, ...extraTxFields
     });
     await logFee(rule.uid, { amount: fee.total, platformAmount: fee.platformAmount, airtelAmount: fee.airtelAmount, transactionId: txId, type: 'savings', plan });
