@@ -31,9 +31,9 @@ const router = express.Router();
 // Normalize Malawi mobile numbers to the canonical 265XXXXXXXXX form.
 // All money-moving provider calls should receive one consistent format.
 function normalizeMalawiPhone(phone) {
-  const clean = String(phone || '').replace(/[\\s-]/g, '');
-  if (/^0[89]\\d{8}$/.test(clean)) return '265' + clean.slice(1);
-  if (/^265[89]\\d{8}$/.test(clean)) return clean;
+  const clean = String(phone || '').replace(/[\s-]/g, '');
+  if (/^0[89]\d{8}$/.test(clean)) return '265' + clean.slice(1);
+  if (/^265[89]\d{8}$/.test(clean)) return clean;
   return null;
 }
 
