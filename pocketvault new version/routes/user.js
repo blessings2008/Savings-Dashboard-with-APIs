@@ -28,16 +28,25 @@ import {
 import { unfreezeGoalsOnRenewal } from '../jobs.js';
 
 const router = express.Router();
+// Normalize Malawi mobile numbers to the canonical 265XXXXXXXXX form.
+// All money-moving provider calls should receive one consistent format.
+function normalizeMalawiPhone(phone) {
+  const clean = String(phone || '').replace(/[\\s-]/g, '');
+  if (/^0[89]\\d{8}$/.test(clean)) return '265' + clean.slice(1);
+  if (/^265[89]\\d{8}$/.test(clean)) return clean;
+  return null;
+}
+
 // Resolve the only phone number that money-moving endpoints may use.
 // The client is never trusted for this value: it must come from the
 // authenticated user's Firestore profile and the KYC record must be verified.
 async function requireKycPhone(uid) {
   const snap = await db.collection('users').doc(uid).get();
   const user = snap.data() || {};
-  if (!user.phone) return null;
+  const phone = normalizeMalawiPhone(user.phone);
   const isVerified = user.kycStatus === 'verified' || user.kycStatus === 'mock_verified';
-  if (!isVerified) return null;
-  return user.phone;
+  if (!phone || !isVerified || user.phoneVerified === false) return null;
+  return phone;
 }
 
 
@@ -265,7 +274,32 @@ router.post('/api/profile',
     // update when the caller actually sent it.
     const updates = { updatedAt: FieldValue.serverTimestamp() };
     if (name !== undefined) updates.name = name || null;
-    if (phone !== undefined) updates.phone = phone || null;
+
+    if (phone !== undefined) {
+      const currentSnap = await db.collection('users').doc(uid).get();
+      const currentUser = currentSnap.data() || {};
+      const currentVerified = currentUser.kycStatus === 'verified' || currentUser.kycStatus === 'mock_verified';
+
+      // Once a phone has been KYC-verified it cannot be silently replaced
+      // through the general profile endpoint. A new number must go through
+      // the KYC flow so ownership is proven again.
+      if (currentVerified && currentUser.phone) {
+        const requested = normalizeMalawiPhone(phone);
+        const current = normalizeMalawiPhone(currentUser.phone);
+        if (requested !== current) {
+          return res.status(403).json({
+            success: false,
+            error: 'Your verified phone number cannot be changed from Profile. Start phone verification again to use a different number.'
+          });
+        }
+      } else {
+        const normalized = normalizeMalawiPhone(phone);
+        if (phone && !normalized) {
+          return res.status(400).json({ success: false, error: 'Invalid Malawi phone number' });
+        }
+        updates.phone = normalized || null;
+      }
+    }
     // Business-plan merchants can name their business — shown to
     // payers as the merchant identity when they look up a code (see
     // GET /api/merchant/lookup/:code) and on the merchant's own
@@ -429,8 +463,8 @@ router.post('/api/kyc/send-otp',
   rateLimit(5, 60 * 1000),
   asyncHandler(async (req, res) => {
     const { uid, phone } = req.body;
-    const phoneClean = phone?.replace(/\s/g, '');
-    const validPhone = /^(0[89][0-9]{8}|265[89][0-9]{8})$/.test(phoneClean);
+    const phoneClean = normalizeMalawiPhone(phone);
+    const validPhone = Boolean(phoneClean);
     if (!validPhone) {
       return res.status(400).json({ success: false, error: 'Invalid Malawi phone number' });
     }
@@ -498,7 +532,11 @@ router.post('/api/kyc/verify-otp',
   rateLimit(10, 60 * 1000),
   asyncHandler(async (req, res) => {
     const { uid, phone, otp } = req.body;
-    const phoneClean = phone?.replace(/\s/g, '');
+    const phoneClean = normalizeMalawiPhone(phone);
+
+    if (!phoneClean) {
+      return res.status(400).json({ success: false, error: 'Invalid Malawi phone number' });
+    }
 
     if (!otp || !/^\d{6}$/.test(otp)) {
       return res.status(400).json({ success: false, error: 'Enter the 6-digit code' });
