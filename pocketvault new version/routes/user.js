@@ -1182,66 +1182,12 @@ router.post('/api/goals/:goalId/allocate',
   asyncHandler(async (req, res) => {
     const { goalId } = req.params;
     const { uid, amount, idempotencyKey } = req.body;
-    if (!amount) {
-      return res.status(400).json({ success: false, error: 'amount required' });
-    }
+    if (!amount) return res.status(400).json({ success: false, error: 'amount required' });
+
     const parsedAmount = parseAmount(amount);
-    if (parsedAmount === null) {
-      return res.status(400).json({ success: false, error: 'Enter a valid amount' });
-    }
-
-    const goalSnap = await db.collection('goals').doc(goalId).get();
-    const goal = goalSnap.data();
-    if (!goal) return res.status(404).json({ success: false, error: 'Goal not found' });
-    if (goal.uid !== uid) return res.status(403).json({ success: false, error: 'Forbidden' });
-    if (goal.completed) return res.status(400).json({ success: false, error: 'Goal already completed' });
-    if (goal.frozen) {
-      return res.status(400).json({
-        success: false,
-        error: 'This goal is frozen because your subscription expired. Unlock it or renew to allocate funds.',
-        frozen: true
-      });
-    }
-
-    const outcome = await withIdempotency(uid, idempotencyKey, async () => {
-      const userSnap = await db.collection('users').doc(uid).get();
-      const userData = userSnap.data() || {};
-      if ((userData.accountBalance || 0) < parsedAmount) {
-        const err = new Error(`Insufficient account balance. Available: MWK ${(userData.accountBalance || 0).toLocaleString()}`);
-        err.isTransferFailure = true;
-        err.details = { insufficientBalance: true };
-        throw err;
-      }
-
-      const goalBefore = { ...goal };
-      await db.collection('users').doc(uid).set({
-        accountBalance: FieldValue.increment(-parsedAmount)
-      }, { merge: true });
-      const updated = await updateGoalProgress(uid, goalId, parsedAmount);
-      const reference = generateRef();
-      await logTransaction(uid, {
-        type: 'allocation', amount: parsedAmount, fee: 0,
-        goalId, goalName: goal.name, reference, status: 'completed'
-      });
-      await pushNotification(uid, {
-        type: 'savings_success',
-        message: updated?.completed
-          ? `🎉 Goal complete! You reached your ${goal.name} target!`
-          : `💰 Allocated MWK ${parsedAmount.toLocaleString()} to ${goal.name}. ${Math.round(((updated?.saved || 0) / goal.target) * 100)}% done.`
-      });
-      try { await checkGoalMilestone(uid, goalBefore, updated); } catch (e) { logSystemError('goal_milestone', e.message, { uid, stack: e.stack }); }
-      clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
-      return { success: true, message: `MWK ${parsedAmount} allocated to ${goal.name}`, reference, goal: updated };
-    }).catch(err => {
-      if (err.isTransferFailure) return { success: false, error: err.message, details: err.details, _statusCode: 400 };
-      throw err;
-    });
-
-    const statusCode = outcome._statusCode || 200;
-    delete outcome._statusCode;
-    res.status(statusCode).json(outcome);
-  })
-);
+    if (parsedAmount === null) return res.status(400).json({ success: false, error: 'Enter a valid amount' });
+    if (parsedAmount < SECURITY.MIN_SAVE_AMOUNT) return res.status(400).json({ success: false, error: `Minimum allocation is MWK ${SECURITY.MIN_SAVE_AMOUNT}` });
+    if (parsedAmount > SECURITY.MAX_SAVE_AMOUNT) return res.status(400).json({ success: false, error: 'Amount exceeds maximum limit' });
 
     const outcome = await withIdempotency(uid, idempotencyKey, async () => {
       const userRef = db.collection('users').doc(uid);
@@ -1255,39 +1201,42 @@ router.post('/api/goals/:goalId/allocate',
         const userSnap = await transaction.get(userRef);
         const goalSnap = await transaction.get(goalRef);
         const userData = userSnap.data() || {};
-        const currentGoal = goalSnap.data();
+        const goal = goalSnap.data();
 
-        if (!currentGoal || currentGoal.uid !== uid) {
-          const err = new Error('Goal not found');
-          err.statusCode = 404;
-          throw err;
+        if (!goal) {
+          const err = new Error('Goal not found'); err.statusCode = 404; throw err;
         }
-        if (currentGoal.completed) {
-          const err = new Error('Goal already completed');
-          err.statusCode = 400;
-          throw err;
+        if (goal.uid !== uid) {
+          const err = new Error('Forbidden'); err.statusCode = 403; throw err;
         }
-        if (currentGoal.frozen) {
+        if (goal.completed) {
+          const err = new Error('Goal already completed'); err.statusCode = 400; throw err;
+        }
+        if (goal.frozen) {
           const err = new Error('This goal is frozen because your subscription expired. Unlock or renew to allocate funds.');
-          err.statusCode = 400;
-          throw err;
+          err.statusCode = 400; throw err;
         }
         if ((userData.accountBalance || 0) < parsedAmount) {
           const err = new Error(`Insufficient account balance. Available: MWK ${(userData.accountBalance || 0).toLocaleString()}`);
-          err.isTransferFailure = true;
-          err.details = { insufficientBalance: true };
-          throw err;
+          err.isTransferFailure = true; err.details = { insufficientBalance: true }; throw err;
         }
 
-        const saved = Number(currentGoal.saved || 0);
-        const target = Number(currentGoal.target || 0);
+        const saved = Number(goal.saved || 0);
+        const target = Number(goal.target || 0);
         const nextSaved = saved + parsedAmount;
         const completed = target > 0 && nextSaved >= target;
-        goalName = currentGoal.name || goalName;
-        updatedGoal = { ...currentGoal, saved: nextSaved, completed };
+        goalName = goal.name || goalName;
+        updatedGoal = { ...goal, saved: nextSaved, completed };
 
-        transaction.set(userRef, { accountBalance: FieldValue.increment(-parsedAmount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        transaction.set(goalRef, { saved: nextSaved, completed, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(userRef, {
+          accountBalance: FieldValue.increment(-parsedAmount),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(goalRef, {
+          saved: nextSaved,
+          completed,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
         transaction.set(txRef, {
           uid, type: 'allocation', amount: parsedAmount, fee: 0,
           goalId, goalName, reference, status: 'completed',
