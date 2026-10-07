@@ -1243,6 +1243,79 @@ router.post('/api/goals/:goalId/allocate',
   })
 );
 
+    const outcome = await withIdempotency(uid, idempotencyKey, async () => {
+      const userRef = db.collection('users').doc(uid);
+      const goalRef = db.collection('goals').doc(goalId);
+      const txRef = db.collection('transactions').doc();
+      const reference = generateRef();
+      let updatedGoal = null;
+      let goalName = 'Savings goal';
+
+      await db.runTransaction(async transaction => {
+        const userSnap = await transaction.get(userRef);
+        const goalSnap = await transaction.get(goalRef);
+        const userData = userSnap.data() || {};
+        const currentGoal = goalSnap.data();
+
+        if (!currentGoal || currentGoal.uid !== uid) {
+          const err = new Error('Goal not found');
+          err.statusCode = 404;
+          throw err;
+        }
+        if (currentGoal.completed) {
+          const err = new Error('Goal already completed');
+          err.statusCode = 400;
+          throw err;
+        }
+        if (currentGoal.frozen) {
+          const err = new Error('This goal is frozen because your subscription expired. Unlock or renew to allocate funds.');
+          err.statusCode = 400;
+          throw err;
+        }
+        if ((userData.accountBalance || 0) < parsedAmount) {
+          const err = new Error(`Insufficient account balance. Available: MWK ${(userData.accountBalance || 0).toLocaleString()}`);
+          err.isTransferFailure = true;
+          err.details = { insufficientBalance: true };
+          throw err;
+        }
+
+        const saved = Number(currentGoal.saved || 0);
+        const target = Number(currentGoal.target || 0);
+        const nextSaved = saved + parsedAmount;
+        const completed = target > 0 && nextSaved >= target;
+        goalName = currentGoal.name || goalName;
+        updatedGoal = { ...currentGoal, saved: nextSaved, completed };
+
+        transaction.set(userRef, { accountBalance: FieldValue.increment(-parsedAmount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(goalRef, { saved: nextSaved, completed, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(txRef, {
+          uid, type: 'allocation', amount: parsedAmount, fee: 0,
+          goalId, goalName, reference, status: 'completed',
+          timestamp: FieldValue.serverTimestamp()
+        });
+      });
+
+      await pushNotification(uid, {
+        type: 'savings_success',
+        message: updatedGoal.completed
+          ? `🎉 Goal complete! You reached your ${goalName} target!`
+          : `💰 Allocated MWK ${parsedAmount.toLocaleString()} to ${goalName}. ${Math.round(((updatedGoal.saved || 0) / (updatedGoal.target || 1)) * 100)}% done.`
+      });
+      clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
+      return { success: true, message: `MWK ${parsedAmount} allocated to ${goalName}`, reference, goal: updatedGoal, transactionId: txRef.id };
+    }).catch(err => {
+      if (err.statusCode || err.isTransferFailure) {
+        return { success: false, error: err.message, details: err.details, _statusCode: err.statusCode || 400 };
+      }
+      throw err;
+    });
+
+    const statusCode = outcome._statusCode || 200;
+    delete outcome._statusCode;
+    res.status(statusCode).json(outcome);
+  })
+);
+
 // ----------------------------
 // DEALLOCATE: MOVE MONEY FROM A GOAL BACK TO ACCOUNT BALANCE
 // POST /api/goals/:goalId/deallocate
@@ -1980,39 +2053,46 @@ router.post('/api/transfer',
     const merchantName = merchant.businessName || merchant.name || 'PocketVault Merchant';
 
     const outcome = await withIdempotency(uid, idempotencyKey, async () => {
-      const payerSnapFresh = await db.collection('users').doc(uid).get();
-      const payerFresh = payerSnapFresh.data() || {};
-      if ((payerFresh.accountBalance || 0) < parsedAmount) {
-        const err = new Error(`Insufficient account balance. Available: MWK ${(payerFresh.accountBalance || 0).toLocaleString()}`);
-        err.isTransferFailure = true;
-        err.details = { insufficientBalance: true };
-        throw err;
-      }
-
-      const payerPlan = payerFresh.plan || 'free';
+      const payerPlan = payer.plan || 'free';
       const feePercent = INTERNAL_TRANSFER_FEE_PERCENT[payerPlan] ?? INTERNAL_TRANSFER_FEE_PERCENT.free;
-      // No Airtel leg here, so the internal fee IS the platform fee —
-      // there is no separate airtelAmount to split out.
       const feeTotal = Math.ceil(parsedAmount * (feePercent / 100));
       const netToMerchant = parsedAmount - feeTotal;
       const reference = generateRef();
+      const payerRef = db.collection('users').doc(uid);
+      const merchantRef = db.collection('users').doc(merchantDoc.id);
+      const payerTxRef = db.collection('transactions').doc();
+      const merchantTxRef = db.collection('transactions').doc();
 
-      // Debit payer, credit merchant — no Airtel call, everything
-      // stays inside Firestore.
-      await db.collection('users').doc(uid).set({ accountBalance: FieldValue.increment(-parsedAmount) }, { merge: true });
-      await db.collection('users').doc(merchantDoc.id).set({ accountBalance: FieldValue.increment(netToMerchant) }, { merge: true });
+      await db.runTransaction(async transaction => {
+        const payerSnapFresh = await transaction.get(payerRef);
+        const merchantSnapFresh = await transaction.get(merchantRef);
+        const payerFresh = payerSnapFresh.data() || {};
+        const merchantFresh = merchantSnapFresh.data() || {};
 
-      const txId = await logTransaction(uid, {
-        type: 'internal_transfer', amount: parsedAmount, fee: feeTotal, feePercent,
-        merchantUid: merchantDoc.id, merchantName, merchantCode,
-        reference, status: 'completed'
+        if ((payerFresh.accountBalance || 0) < parsedAmount) {
+          const err = new Error(`Insufficient account balance. Available: MWK ${(payerFresh.accountBalance || 0).toLocaleString()}`);
+          err.isTransferFailure = true;
+          err.details = { insufficientBalance: true };
+          throw err;
+        }
+
+        transaction.set(payerRef, { accountBalance: FieldValue.increment(-parsedAmount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(merchantRef, { accountBalance: FieldValue.increment(netToMerchant), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(payerTxRef, {
+          uid, type: 'internal_transfer', amount: parsedAmount, fee: feeTotal, feePercent,
+          merchantUid: merchantDoc.id, merchantName, merchantCode, reference,
+          status: 'completed', timestamp: FieldValue.serverTimestamp()
+        });
+        transaction.set(merchantTxRef, {
+          uid: merchantDoc.id, type: 'internal_transfer_received', amount: netToMerchant,
+          payerUid: uid, reference, status: 'completed', timestamp: FieldValue.serverTimestamp()
+        });
       });
-      await logFee(uid, { amount: feeTotal, platformAmount: feeTotal, airtelAmount: 0, transactionId: txId, type: 'internal_transfer', plan: payerPlan });
-      await logTransaction(merchantDoc.id, {
-        type: 'internal_transfer_received', amount: netToMerchant,
-        payerUid: uid, reference, status: 'completed'
-      });
 
+      await logFee(uid, {
+        amount: feeTotal, platformAmount: feeTotal, airtelAmount: 0,
+        transactionId: payerTxRef.id, type: 'internal_transfer', plan: payerPlan
+      });
       await pushNotification(uid, {
         type: 'internal_transfer_sent',
         message: `💸 Sent MWK ${parsedAmount.toLocaleString()} to ${merchantName} from your balance.`
@@ -2021,9 +2101,8 @@ router.post('/api/transfer',
         type: 'internal_transfer_received',
         message: `💰 Received MWK ${netToMerchant.toLocaleString()} via balance payment.`
       });
-
       clearCache(`profile_${uid}`, `profile_${merchantDoc.id}`, `analytics_${uid}`, `analytics_${merchantDoc.id}`);
-      return { success: true, message: `MWK ${parsedAmount} sent to ${merchantName}`, reference, fee: feeTotal, netToMerchant, merchantName };
+      return { success: true, message: `MWK ${parsedAmount} sent to ${merchantName}`, reference, transactionId: payerTxRef.id, fee: feeTotal, netToMerchant, merchantName };
     }).catch(err => {
       if (err.isTransferFailure) return { success: false, error: err.message, details: err.details, _statusCode: 400 };
       throw err;
@@ -2032,6 +2111,7 @@ router.post('/api/transfer',
     const statusCode = outcome._statusCode || 200;
     delete outcome._statusCode;
     res.status(statusCode).json(outcome);
+  })    res.status(statusCode).json(outcome);
   })
 );
 
