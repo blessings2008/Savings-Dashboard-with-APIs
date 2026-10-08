@@ -14,27 +14,35 @@ export function asyncHandler(fn) {
 // the authoritative protection for operations that already use them; this queue
 // adds a second boundary for legacy external-provider flows such as withdrawals.
 const mutationQueues = new Map();
-export async function serializeUserMutation(req, res, next) {
-  const uid = req.user?.uid;
-  if (!uid) return next();
+export function serializeUserMutation(req, res, next) {
+  const start = () => {
+    const uid = req.user?.uid;
+    if (!uid) return next();
 
-  const previous = mutationQueues.get(uid) || Promise.resolve();
-  let release;
-  const current = new Promise(resolve => { release = resolve; });
-  mutationQueues.set(uid, current);
+    const previous = mutationQueues.get(uid) || Promise.resolve();
+    let release;
+    const current = new Promise(resolve => { release = resolve; });
+    mutationQueues.set(uid, current);
 
-  await previous;
-
-  let released = false;
-  const done = () => {
-    if (released) return;
-    released = true;
-    release();
-    if (mutationQueues.get(uid) === current) mutationQueues.delete(uid);
+    previous.then(() => {
+      let released = false;
+      const done = () => {
+        if (released) return;
+        released = true;
+        release();
+        if (mutationQueues.get(uid) === current) mutationQueues.delete(uid);
+      };
+      res.once('finish', done);
+      res.once('close', done);
+      next();
+    }).catch(next);
   };
-  res.once('finish', done);
-  res.once('close', done);
-  next();
+
+  // Most mutation routes are mounted before their route-level requireAuth middleware,
+  // so authenticate here as well. Firebase token verification is still repeated by
+  // the route itself, preserving its existing authorization boundary.
+  if (req.user) return start();
+  return requireAuth(req, res, start);
 }
 
 export function rateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
