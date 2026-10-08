@@ -56,6 +56,12 @@ export async function requireAuth(req, res, next) {
         clearCache(`user_deletion_check_${decoded.uid}`);
       } else return res.status(403).json({ success: false, error: 'This account has been closed. Contact support to restore it.', accountDeleted: true });
     }
+    // Firebase disabled accounts are rejected at token issuance, but an already-issued
+    // token can remain usable until it expires. Enforce the Firestore suspension flag
+    // here as a second server-side authorization boundary.
+    if (userDoc?.suspended) {
+      return res.status(403).json({ success: false, error: 'Your account is currently suspended.', code: 'ACCOUNT_SUSPENDED' });
+    }
     next();
   } catch { return res.status(401).json({ success: false, error: 'Unauthorized - invalid token' }); }
 }
