@@ -1550,7 +1550,10 @@ router.post('/api/roundup',
   requireOwnData,
   requirePlan('pro', 'business'),
   asyncHandler(async (req, res) => {
-    const { uid, spendAmount, destination, goalId } = req.body;
+    const { uid, spendAmount, destination, goalId, idempotencyKey } = req.body;
+    if (!idempotencyKey) {
+      return res.status(400).json({ success: false, error: 'idempotencyKey required' });
+    }
     if (!spendAmount) {
       return res.status(400).json({ success: false, error: 'spendAmount required' });
     }
@@ -1574,70 +1577,66 @@ router.post('/api/roundup',
       return res.json({ success: true, message: 'Round-up too small to process', roundUpAmount: 0 });
     }
 
-    let goal = null;
-    if (resolvedDestination === 'goal') {
-      const goalSnap = await db.collection('goals').doc(goalId).get();
-      goal = goalSnap.data();
-      if (!goal || goal.uid !== uid) {
-        return res.status(403).json({ success: false, error: 'Goal not found or forbidden' });
-      }
-      if (goal.frozen) {
-        return res.status(400).json({ success: false, error: 'This goal is frozen — round-up cannot allocate into it right now.', frozen: true });
-      }
-    }
-
-    const reference = generateRef();
-
-    async function creditDestination() {
+    const outcome = await withIdempotency(uid, idempotencyKey, async () => {
+      let goal = null;
       if (resolvedDestination === 'goal') {
-        return updateGoalProgress(uid, goalId, roundUpAmount);
+        const goalSnap = await db.collection('goals').doc(goalId).get();
+        goal = goalSnap.data();
+        if (!goal || goal.uid !== uid) {
+          const err = new Error('Goal not found or forbidden'); err.statusCode = 403; throw err;
+        }
+        if (goal.frozen) {
+          const err = new Error('This goal is frozen — round-up cannot allocate into it right now.'); err.statusCode = 400; throw err;
+        }
       }
-      await db.collection('users').doc(uid).set({ accountBalance: FieldValue.increment(roundUpAmount) }, { merge: true });
-      return null;
-    }
 
-    const destLabel = resolvedDestination === 'goal' ? goal.name : 'your account balance';
+      const reference = generateRef();
+      async function creditDestination() {
+        if (resolvedDestination === 'goal') return updateGoalProgress(uid, goalId, roundUpAmount);
+        await db.collection('users').doc(uid).set({ accountBalance: FieldValue.increment(roundUpAmount) }, { merge: true });
+        return null;
+      }
 
-    if (isMockMode()) {
+      const destLabel = resolvedDestination === 'goal' ? goal.name : 'your account balance';
+      if (isMockMode()) {
+        const updated = await creditDestination();
+        await logTransaction(uid, {
+          type: 'roundup', amount: roundUpAmount, spendAmount: parsed, roundedUp,
+          goalId: resolvedDestination === 'goal' ? goalId : null,
+          goalName: resolvedDestination === 'goal' ? goal.name : null,
+          reference, status: 'mock', phone
+        });
+        await pushNotification(uid, {
+          type: 'roundup_success',
+          message: `🔄 MWK ${roundUpAmount} round-up saved to ${destLabel}.`
+        });
+        clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
+        return { success: true, mock: true, roundUpAmount, reference, goal: updated };
+      }
+
+      const result = await airtelCollect({ phone, amount: roundUpAmount, reference });
+      if (!isAirtelSuccess(result)) {
+        const err = new Error('Round-up failed'); err.statusCode = 400; throw err;
+      }
+
       const updated = await creditDestination();
       await logTransaction(uid, {
-        type: 'roundup', amount: roundUpAmount,
-        spendAmount: parsed, roundedUp,
+        type: 'roundup', amount: roundUpAmount, spendAmount: parsed, roundedUp,
         goalId: resolvedDestination === 'goal' ? goalId : null,
         goalName: resolvedDestination === 'goal' ? goal.name : null,
-        reference, status: 'mock', phone
+        reference, airtelTxnId: result.txnId, status: 'completed', phone
       });
       await pushNotification(uid, {
         type: 'roundup_success',
         message: `🔄 MWK ${roundUpAmount} round-up saved to ${destLabel}.`
       });
       clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
-      return res.json({ success: true, mock: true, roundUpAmount, reference, goal: updated });
-    }
+      return { success: true, roundUpAmount, reference, goal: updated };
+    });
 
-    const result = await airtelCollect({ phone, amount: roundUpAmount, reference });
-    if (isAirtelSuccess(result)) {
-      const updated = await creditDestination();
-      await logTransaction(uid, {
-        type: 'roundup', amount: roundUpAmount,
-        spendAmount: parsed, roundedUp,
-        goalId: resolvedDestination === 'goal' ? goalId : null,
-        goalName: resolvedDestination === 'goal' ? goal.name : null,
-        reference, airtelTxnId: result.txnId,
-        status: 'completed', phone
-      });
-      await pushNotification(uid, {
-        type: 'roundup_success',
-        message: `🔄 MWK ${roundUpAmount} round-up saved to ${destLabel}.`
-      });
-      clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
-      res.json({ success: true, roundUpAmount, reference, goal: updated });
-    } else {
-      res.status(400).json({ success: false, error: 'Round-up failed' });
-    }
+    res.json(outcome);
   })
 );
-
 // ----------------------------
 // MERCHANT: COLLECT
 // POST /api/merchant/collect
@@ -1648,11 +1647,13 @@ router.post('/api/merchant/collect',
   requireOwnData,
   requirePlan('business'),
   asyncHandler(async (req, res) => {
-    const { uid, customerPhone, amount, reference } = req.body;
+    const { uid, customerPhone, amount, reference, idempotencyKey } = req.body;
+    if (!idempotencyKey) {
+      return res.status(400).json({ success: false, error: 'idempotencyKey required' });
+    }
     if (!customerPhone || !amount) {
       return res.status(400).json({ success: false, error: 'customerPhone and amount required' });
     }
-    const ref = reference || generateRef();
     const parsedAmount = parseAmount(amount);
     if (parsedAmount === null) {
       return res.status(400).json({ success: false, error: 'Enter a valid amount' });
@@ -1660,30 +1661,37 @@ router.post('/api/merchant/collect',
     if (parsedAmount > SECURITY.MAX_SAVE_AMOUNT) {
       return res.status(400).json({ success: false, error: 'Amount exceeds maximum limit' });
     }
-    const fee = calcFee(parsedAmount, PLANS.business.transactionFeePercent);
 
-    if (isMockMode()) {
-      await logTransaction(uid, {
-        type: 'collection', amount: parsedAmount,
-        fee: fee.total, customerPhone, reference: ref, status: 'mock'
+    const outcome = await withIdempotency(uid, idempotencyKey, async () => {
+      const ref = reference || generateRef();
+      const fee = calcFee(parsedAmount, PLANS.business.transactionFeePercent);
+
+      if (isMockMode()) {
+        await logTransaction(uid, {
+          type: 'collection', amount: parsedAmount, fee: fee.total,
+          customerPhone, reference: ref, status: 'mock'
+        });
+        return { success: true, mock: true, reference: ref, fee: fee.total };
+      }
+
+      const result = await airtelCollect({ phone: customerPhone, amount: parsedAmount, reference: ref });
+      const success = isAirtelSuccess(result);
+      const txId = await logTransaction(uid, {
+        type: 'collection', amount: parsedAmount, fee: fee.total,
+        customerPhone, reference: ref, airtelTxnId: result.txnId,
+        status: success ? 'pending_customer' : 'failed'
       });
-      return res.json({ success: true, mock: true, reference: ref, fee: fee.total });
-    }
-
-    const result = await airtelCollect({ phone: customerPhone, amount: parsedAmount, reference: ref });
-    const success = isAirtelSuccess(result);
-    const txId = await logTransaction(uid, {
-      type: 'collection', amount: parsedAmount,
-      fee: fee.total, customerPhone, reference: ref,
-      airtelTxnId: result.txnId,
-      status: success ? 'pending_customer' : 'failed'
+      if (success) await logFee(uid, {
+        amount: fee.total, platformAmount: fee.platformAmount, airtelAmount: fee.airtelAmount,
+        transactionId: txId, type: 'collection', plan: 'business'
+      });
+      clearCache(`analytics_${uid}`);
+      return { success, result, reference: ref, fee: fee.total };
     });
-    if (success) await logFee(uid, { amount: fee.total, platformAmount: fee.platformAmount, airtelAmount: fee.airtelAmount, transactionId: txId, type: 'collection', plan: 'business' });
-    clearCache(`analytics_${uid}`);
-    res.json({ success, result, reference: ref, fee: fee.total });
+
+    res.json(outcome);
   })
 );
-
 // ----------------------------
 // MERCHANT: DISBURSE
 // POST /api/merchant/disburse
@@ -1694,11 +1702,13 @@ router.post('/api/merchant/disburse',
   requireOwnData,
   requirePlan('business'),
   asyncHandler(async (req, res) => {
-    const { uid, phone, amount, reference } = req.body;
+    const { uid, phone, amount, reference, idempotencyKey } = req.body;
+    if (!idempotencyKey) {
+      return res.status(400).json({ success: false, error: 'idempotencyKey required' });
+    }
     if (!phone || !amount) {
       return res.status(400).json({ success: false, error: 'phone and amount required' });
     }
-    const ref = reference || generateRef();
     const parsedAmount = parseAmount(amount);
     if (parsedAmount === null) {
       return res.status(400).json({ success: false, error: 'Enter a valid amount' });
@@ -1706,30 +1716,37 @@ router.post('/api/merchant/disburse',
     if (parsedAmount > SECURITY.MAX_SAVE_AMOUNT) {
       return res.status(400).json({ success: false, error: 'Amount exceeds maximum limit' });
     }
-    const fee = calcFee(parsedAmount, PLANS.business.transactionFeePercent);
 
-    if (isMockMode()) {
-      await logTransaction(uid, {
-        type: 'disbursement', amount: parsedAmount,
-        fee: fee.total, phone, reference: ref, status: 'mock'
+    const outcome = await withIdempotency(uid, idempotencyKey, async () => {
+      const ref = reference || generateRef();
+      const fee = calcFee(parsedAmount, PLANS.business.transactionFeePercent);
+
+      if (isMockMode()) {
+        await logTransaction(uid, {
+          type: 'disbursement', amount: parsedAmount, fee: fee.total,
+          phone, reference: ref, status: 'mock'
+        });
+        return { success: true, mock: true, reference: ref, fee: fee.total };
+      }
+
+      const result = await airtelDisburse({ phone, amount: parsedAmount, reference: ref });
+      const success = isAirtelSuccess(result);
+      const txId = await logTransaction(uid, {
+        type: 'disbursement', amount: parsedAmount, fee: fee.total,
+        phone, reference: ref, airtelTxnId: result.txnId,
+        status: success ? 'completed' : 'failed'
       });
-      return res.json({ success: true, mock: true, reference: ref, fee: fee.total });
-    }
-
-    const result = await airtelDisburse({ phone, amount: parsedAmount, reference: ref });
-    const success = isAirtelSuccess(result);
-    const txId = await logTransaction(uid, {
-      type: 'disbursement', amount: parsedAmount,
-      fee: fee.total, phone, reference: ref,
-      airtelTxnId: result.txnId,
-      status: success ? 'completed' : 'failed'
+      if (success) await logFee(uid, {
+        amount: fee.total, platformAmount: fee.platformAmount, airtelAmount: fee.airtelAmount,
+        transactionId: txId, type: 'disbursement', plan: 'business'
+      });
+      clearCache(`analytics_${uid}`);
+      return { success, result, reference: ref, fee: fee.total };
     });
-    if (success) await logFee(uid, { amount: fee.total, platformAmount: fee.platformAmount, airtelAmount: fee.airtelAmount, transactionId: txId, type: 'disbursement', plan: 'business' });
-    clearCache(`analytics_${uid}`);
-    res.json({ success, result, reference: ref, fee: fee.total });
+
+    res.json(outcome);
   })
 );
-
 // ============================================================
 // PAY BY MERCHANT CODE
 // PocketVault's answer to an Airtel Money agent code. Any
