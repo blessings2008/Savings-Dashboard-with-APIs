@@ -631,7 +631,8 @@ function renderMerchantAccountTab(content, navigate) {
     errBox.style.display = "none";
     btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
     try {
-      const res = await api.merchantCollect(state.user.uid, { customerPhone: phone, amount });
+      const idempotencyKey = crypto.randomUUID();
+      const res = await api.merchantCollect(state.user.uid, { customerPhone: phone, amount, idempotencyKey });
       toast(res.mock ? "Payment request queued (mock mode)" : "Payment request sent");
       renderMerchantPage(document.getElementById("main-content"), navigate, "account");
     } catch (e) {
@@ -650,7 +651,8 @@ function renderMerchantAccountTab(content, navigate) {
     errBox.style.display = "none";
     btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
     try {
-      const res = await api.merchantDisburse(state.user.uid, { phone, amount });
+      const idempotencyKey = crypto.randomUUID();
+      const res = await api.merchantDisburse(state.user.uid, { phone, amount, idempotencyKey });
       toast(res.mock ? "Payment queued (mock mode)" : "Payment sent");
       renderMerchantPage(document.getElementById("main-content"), navigate, "account");
     } catch (e) {
