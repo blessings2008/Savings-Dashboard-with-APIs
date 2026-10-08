@@ -8,6 +8,35 @@ export function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
+// Serialize money-affecting mutations per authenticated user on this server instance.
+// This closes a race where two different idempotency keys can both pass a balance
+// pre-check before either request commits its debit. Firestore transactions remain
+// the authoritative protection for operations that already use them; this queue
+// adds a second boundary for legacy external-provider flows such as withdrawals.
+const mutationQueues = new Map();
+export async function serializeUserMutation(req, res, next) {
+  const uid = req.user?.uid;
+  if (!uid) return next();
+
+  const previous = mutationQueues.get(uid) || Promise.resolve();
+  let release;
+  const current = new Promise(resolve => { release = resolve; });
+  mutationQueues.set(uid, current);
+
+  await previous;
+
+  let released = false;
+  const done = () => {
+    if (released) return;
+    released = true;
+    release();
+    if (mutationQueues.get(uid) === current) mutationQueues.delete(uid);
+  };
+  res.once('finish', done);
+  res.once('close', done);
+  next();
+}
+
 export function rateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
   return (req, res, next) => {
     // Admin Firestore backup exports are intentionally protected, but
