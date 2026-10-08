@@ -152,7 +152,18 @@ app.get('/api/admin/users/:uid/export',requireAdmin,async(req,res,next)=>{
   }catch(error){next(error);}
 });
 
-app.use('/',userRoutes);app.use('/',userAIRoutes);app.use('/',userAIInsightRoutes);app.use('/',userSupportAIRoutes);app.use('/',transactionPinRoutes);app.use('/',referralAdminRoutes);app.use('/',systemAIRoutes);app.use('/',adminRoutes);app.use('/',emailRoutes);app.use('/admin',express.static(join(__dirname,'admin')));
+app.use('/',userRoutes);app.use('/',userAIRoutes);app.use('/',userAIInsightRoutes);app.use('/',userSupportAIRoutes);app.use('/',transactionPinRoutes);app.use('/',referralAdminRoutes);app.use('/',systemAIRoutes);app.use('/',adminRoutes);app.use('/',emailRoutes);
+
+// Serve the PocketVault frontend and its ES modules/assets from the same directory
+// as index.html. This MUST run before the SPA catch-all below; otherwise requests
+// such as /app.js and /style.css fall through to index.html and are returned with
+// text/html, which browsers correctly reject for module scripts and stylesheets.
+app.use(express.static(__dirname,{extensions:false,index:false,fallthrough:true,setHeaders:(res,filePath)=>{
+  if(filePath.endsWith('.js')) res.type('application/javascript');
+  else if(filePath.endsWith('.css')) res.type('text/css');
+  else if(filePath.endsWith('.json')) res.type('application/json');
+}}));
+app.use('/admin',express.static(join(__dirname,'admin')));
 app.get('*',(req,res)=>{if(req.path.startsWith('/admin')){const adminIndex=join(__dirname,'admin','index.html');if(existsSync(adminIndex))return res.sendFile(adminIndex);return res.status(404).json({success:false,error:'Admin panel not deployed'});}const indexPath=join(__dirname,'index.html');if(existsSync(indexPath))res.sendFile(indexPath);else res.status(200).json({status:'ok',app:'PocketVault API',message:'Backend running. No frontend deployed yet.',health:'/api/health'});});
 app.use((err,req,res,next)=>{const message=err.message||'Unknown error';log.error('Unhandled request error',{requestId:req.requestId,url:req.url,method:req.method,error:message,stack:err.stack});logSystemError('express',message,{stack:err.stack,url:req.url,method:req.method,requestId:req.requestId});sendExternalAlert('Unhandled request error',`${req.method} ${req.url}\n${message}\nRequest: ${req.requestId}`);if(err.statusCode&&err.statusCode>=400&&err.statusCode<500)return res.status(err.statusCode).json({success:false,error:message,requestId:req.requestId});const unavailable=err.code===14||err.code===4||/UNAVAILABLE|DEADLINE_EXCEEDED/i.test(message);if(unavailable)return res.status(503).json({success:false,error:'Our database is temporarily unavailable. Please try again in a few moments.',requestId:req.requestId});res.status(500).json({success:false,error:'Something went wrong. Please try again.',requestId:req.requestId});});
 process.on('uncaughtException',err=>{console.error('Uncaught:',err.message);logSystemError('uncaughtException',err.message,{stack:err.stack});sendExternalAlert('Uncaught exception',`${err.message}\n${(err.stack||'').slice(0,500)}`);});process.on('unhandledRejection',reason=>{const message=reason instanceof Error?reason.message:String(reason);console.error('Rejection:',message);logSystemError('unhandledRejection',message,{stack:reason?.stack});sendExternalAlert('Unhandled promise rejection',message);});
