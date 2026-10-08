@@ -500,16 +500,26 @@ export async function deactivateMerchantCode(uid) {
 // ----------------------------
 // IDEMPOTENCY PROTECTION
 // ----------------------------
-export async function withIdempotency(uid, idempotencyKey, handler) {
-  // Every caller of this helper performs a money-affecting operation.
-  // Never silently fall back to an unprotected execution path.
+export async function withIdempotency(uid, idempotencyKey, handler, scope = 'default') {
+  // Every money-affecting operation must be protected by an idempotency key.
+  // Scope the key by operation so the same client key can never replay
+  // a result from a different money-moving endpoint.
   if (!idempotencyKey || typeof idempotencyKey !== 'string' || idempotencyKey.length < 16 || idempotencyKey.length > 128) {
     const err = new Error('idempotencyKey required');
     err.statusCode = 400;
     throw err;
   }
+  if (!scope || typeof scope !== 'string' || scope.length > 80) {
+    const err = new Error('idempotency scope required');
+    err.statusCode = 500;
+    throw err;
+  }
 
-  const lockRef = db.collection('idempotency_keys').doc(`${uid}_${idempotencyKey}`);
+  const lockId = crypto
+    .createHash('sha256')
+    .update(`${uid}:${scope}:${idempotencyKey}`)
+    .digest('hex');
+  const lockRef = db.collection('idempotency_keys').doc(lockId);
 
   try {
     await lockRef.create({
