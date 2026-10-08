@@ -697,8 +697,7 @@ router.post('/api/goals',
     }
 
     // Validate deadlineBehavior — only meaningful for locked goals with a deadline
-    const validBehaviors = ['stay_locked', 'auto_unlock', 'ask_me'];
-    let finalBehavior = null;
+    const validBehaviors = ['stay_locked', 'auto_unlock', 'ask_me'];    let finalBehavior = null;
     if (lockType === 'hard' && deadline) {
       finalBehavior = validBehaviors.includes(deadlineBehavior) ? deadlineBehavior : 'ask_me';
     }
@@ -1397,8 +1396,7 @@ router.post('/api/autosave/rules',
       : (goalId ? 'goal' : 'balance');
 
     if (resolvedDestination === 'goal' && !goalId) {
-      return res.status(400).json({ success: false, error: 'goalId is required when destination is "goal"' });
-    }
+      return res.status(400).json({ success: false, error: 'goalId is required when destination is "goal"' });    }
 
     const { config } = await getPlanConfig(uid);
     const existing = await db.collection('autosave_rules')
@@ -2060,7 +2058,6 @@ router.post('/api/transfer',
     const statusCode = outcome._statusCode || 200;
     delete outcome._statusCode;
     res.status(statusCode).json(outcome);
-  })    res.status(statusCode).json(outcome);
   })
 );
 
@@ -2097,8 +2094,7 @@ router.get('/api/transactions',
 // TRANSACTION: STATUS CHECK
 // GET /api/transactions/:reference/status
 // ----------------------------
-router.get('/api/transactions/:reference/status',
-  requireAuth,
+router.get('/api/transactions/:reference/status',  requireAuth,
   asyncHandler(async (req, res) => {
     const { reference } = req.params;
     const uid = req.user.uid;
