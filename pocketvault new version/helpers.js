@@ -501,8 +501,12 @@ export async function deactivateMerchantCode(uid) {
 // IDEMPOTENCY PROTECTION
 // ----------------------------
 export async function withIdempotency(uid, idempotencyKey, handler) {
-  if (!idempotencyKey) {
-    return handler();
+  // Every caller of this helper performs a money-affecting operation.
+  // Never silently fall back to an unprotected execution path.
+  if (!idempotencyKey || typeof idempotencyKey !== 'string' || idempotencyKey.length < 16 || idempotencyKey.length > 128) {
+    const err = new Error('idempotencyKey required');
+    err.statusCode = 400;
+    throw err;
   }
 
   const lockRef = db.collection('idempotency_keys').doc(`${uid}_${idempotencyKey}`);
