@@ -5,7 +5,7 @@ import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import crypto from 'crypto';
 import { validateEnvironment, db, adminAuth } from './core/firebase.js';
-import { AIRTEL, PAYCHANGU, SECURITY, resolvePaymentProvider } from './core/config.js';
+import { AIRTEL, PAYCHANGU, SECURITY, resolvePaymentProvider, isMockMode } from './core/config.js';
 import { sanitizeBody, rateLimit, requireAuth } from './core/middleware.js';
 import { requireTransactionPin } from './core/transaction-pin-guard.js';
 import { log, logSystemError, sendExternalAlert, fetchWithRetry } from './helpers.js';
@@ -22,7 +22,43 @@ import referralAdminRoutes from './routes/referrals-admin.js';
 import systemAIRoutes from './routes/system-ai.js';
 import { reconcilePendingTransactions, monitorFloat, checkExpiredSubscriptions, checkGoalDeadlines, checkFrozenGoalGracePeriod, runAutosaveRules, sweepUnresolvedFunds, checkTransactionSummaries, proactiveAnomalyCheck } from './jobs.js';
 const __filename=fileURLToPath(import.meta.url);const __dirname=dirname(__filename);validateEnvironment();const app=express();const PORT=process.env.PORT||3000;
-app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('X-XSS-Protection','1; mode=block');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','geolocation=(), microphone=(), camera=()');res.removeHeader('X-Powered-By');next();});app.use((req,res,next)=>{req.requestId=crypto.randomBytes(6).toString('hex');res.setHeader('X-Request-Id',req.requestId);next();});app.use(cors({origin:[`https://${process.env.APP_DOMAIN||'savings-dashboard-with-apis-2-0.onrender.com'}`,'http://localhost:3000'],methods:['GET','POST','PATCH','DELETE'],allowedHeaders:['Content-Type','Authorization','x-admin-secret'],credentials:true}));app.use(express.json({limit:'1mb'}));app.use(sanitizeBody);app.use(express.static(__dirname));app.set('trust proxy',1);app.use('/api/',rateLimit(300,15*60*1000));app.use('/api/save',rateLimit(10,60*1000));app.use('/api/withdraw',rateLimit(5,60*1000));app.use('/api/transfer',rateLimit(10,60*1000));app.use('/api/merchant/pay',rateLimit(10,60*1000));app.use('/api/subscribe',rateLimit(5,60*1000));app.use('/api/merchant/collect',rateLimit(20,60*1000));app.use('/api/merchant/disburse',rateLimit(20,60*1000));app.use('/api/kyc',rateLimit(5,60*1000));app.use('/api/security/transaction-pin',rateLimit(10,15*60*1000));
+app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('X-XSS-Protection','1; mode=block');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','geolocation=(), microphone=(), camera=()');if(process.env.NODE_ENV==='production')res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');res.removeHeader('X-Powered-By');next();});app.use((req,res,next)=>{req.requestId=crypto.randomBytes(6).toString('hex');res.setHeader('X-Request-Id',req.requestId);next();});
+const allowedOrigins=[`https://${process.env.APP_DOMAIN||'savings-dashboard-with-apis-2-0.onrender.com'}`];if(process.env.NODE_ENV!=='production')allowedOrigins.push('http://localhost:3000');
+app.use(cors({origin:allowedOrigins,methods:['GET','POST','PATCH','DELETE'],allowedHeaders:['Content-Type','Authorization','x-admin-secret'],credentials:true}));
+app.use(express.json({limit:'1mb'}));app.use(sanitizeBody);app.set('trust proxy',1);app.use('/api/',rateLimit(300,15*60*1000));app.use('/api/save',rateLimit(10,60*1000));app.use('/api/withdraw',rateLimit(5,60*1000));app.use('/api/transfer',rateLimit(10,60*1000));app.use('/api/merchant/pay',rateLimit(10,60*1000));app.use('/api/subscribe',rateLimit(5,60*1000));app.use('/api/merchant/collect',rateLimit(20,60*1000));app.use('/api/merchant/disburse',rateLimit(20,60*1000));app.use('/api/kyc',rateLimit(5,60*1000));app.use('/api/security/transaction-pin',rateLimit(10,15*60*1000));
+
+// SECURITY GATES:
+// In production, phone verification must not fall back to an in-app OTP.
+// The current app has no real SMS/USSD OTP delivery provider, so allowing
+// this flow would let an authenticated user verify a phone number without
+// proving possession of that number. Keep KYC available in mock mode only
+// until a real possession-verification channel is implemented.
+app.use('/api/kyc', (req,res,next)=>{
+  if (!isMockMode()) {
+    return res.status(503).json({
+      success:false,
+      error:'Phone verification is temporarily unavailable while secure SMS verification is being configured.',
+      code:'PHONE_VERIFICATION_PROVIDER_REQUIRED'
+    });
+  }
+  next();
+});
+
+// Payment webhooks must never accept unauthenticated traffic just because
+// their signing secret was omitted. A missing secret is a deployment error.
+app.use('/api/airtel/notification', (req,res,next)=>{
+  if (!SECURITY.AIRTEL_WEBHOOK_SECRET) {
+    return res.status(503).json({success:false,error:'Webhook verification is not configured.'});
+  }
+  next();
+});
+app.use('/api/paychangu/notification', (req,res,next)=>{
+  if (!PAYCHANGU.WEBHOOK_SECRET) {
+    return res.status(503).json({success:false,error:'Webhook verification is not configured.'});
+  }
+  next();
+});
+
 app.use('/api/withdraw',requireTransactionPin);app.use('/api/transfer',requireTransactionPin);app.use('/api/merchant/pay',requireTransactionPin);app.use('/api/merchant/disburse',requireTransactionPin);
 app.post('/api/profile',requireAuth,async(req,res,next)=>{const uid=req.user.uid;try{const snap=await db.collection('users').doc(uid).get();const data=snap.data()||{};if(!data.welcomeEmailSentAt){const user=await adminAuth.getUser(uid);if(user.email){const name=data.name||user.displayName||req.body.name||'there';try{const template=buildWelcomeEmail(name);const result=await sendEmail({to:user.email,subject:'Welcome to PocketVault 🇲🇼',idempotencyKey:`welcome-user/${uid}`,tags:[{name:'category',value:'welcome'},{name:'product',value:'pocketvault'}],...template});await db.collection('users').doc(uid).set({welcomeEmailSentAt:new Date().toISOString(),welcomeEmailId:result?.id||null},{merge:true});}catch(emailError){log.warn('Welcome email failed; continuing profile request',{uid,error:emailError.message,code:emailError.code||null});}}}}catch(error){log.warn('Welcome email preflight failed; continuing profile request',{uid,error:error.message});}next();});
 app.use('/',userRoutes);app.use('/',userAIRoutes);app.use('/',userAIInsightRoutes);app.use('/',userSupportAIRoutes);app.use('/',transactionPinRoutes);app.use('/',referralAdminRoutes);app.use('/',systemAIRoutes);app.use('/',adminRoutes);app.use('/',emailRoutes);app.use('/admin',express.static(join(__dirname,'admin')));
