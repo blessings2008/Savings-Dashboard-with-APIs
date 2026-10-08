@@ -17,35 +17,13 @@ let firebaseCredential;
 const SECRET_FILE_PATH = '/etc/secrets/serviceAccountKey.json';
 const LOCAL_FILE_PATH = './serviceAccountKey.json';
 
-// ----------------------------
-// DEBUG: Show what credential sources are available
-// ----------------------------
-console.log('🔍 Checking Firebase credential sources:');
-console.log('   /etc/secrets/serviceAccountKey.json exists:', existsSync(SECRET_FILE_PATH));
-console.log('   ./serviceAccountKey.json exists:', existsSync(LOCAL_FILE_PATH));
-console.log('   GOOGLE_APPLICATION_CREDENTIALS_JSON set:', !!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-console.log('   FIREBASE_PROJECT_ID set:', !!process.env.FIREBASE_PROJECT_ID, process.env.FIREBASE_PROJECT_ID || '');
-console.log('   FIREBASE_CLIENT_EMAIL set:', !!process.env.FIREBASE_CLIENT_EMAIL);
-console.log('   FIREBASE_PRIVATE_KEY set:', !!process.env.FIREBASE_PRIVATE_KEY);
-console.log('   FIREBASE_PRIVATE_KEY length:', (process.env.FIREBASE_PRIVATE_KEY || '').length);
-
-// List what's actually in /etc/secrets if it exists
-try {
-  if (existsSync('/etc/secrets')) {
-    const fs = await import('fs');
-    const files = fs.readdirSync('/etc/secrets');
-    console.log('   Files in /etc/secrets:', files);
-  } else {
-    console.log('   /etc/secrets directory does not exist');
-  }
-} catch (e) {
-  console.log('   Could not read /etc/secrets:', e.message);
-}
-
+// Credential source diagnostics deliberately avoid logging secret names, paths, or lengths.
+// Production logs must not disclose infrastructure details that help an attacker map
+// the credential surface. Configuration validation below still fails fast when required
+// credentials are absent.
 if (existsSync(SECRET_FILE_PATH)) {
   const raw = readFileSync(SECRET_FILE_PATH, 'utf8');
   const serviceAccount = JSON.parse(raw);
-  console.log('   Loaded keys from secret file:', Object.keys(serviceAccount));
   if (!serviceAccount.private_key) {
     console.error('❌ Secret file is missing private_key field');
     process.exit(1);
@@ -59,7 +37,6 @@ if (existsSync(SECRET_FILE_PATH)) {
 } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
   try {
     const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-    console.log('   Loaded keys from env JSON:', Object.keys(serviceAccount));
     if (!serviceAccount.private_key) throw new Error('private_key missing from JSON');
     firebaseCredential = cert(serviceAccount);
     console.log('✅ Firebase loaded from env JSON');
