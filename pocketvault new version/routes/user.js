@@ -200,7 +200,7 @@ router.post('/api/subscribe',
         expiry: new Date(expiry).toISOString(),
         merchantCode
       };
-    }).catch(err => {
+    }, 'subscribe').catch(err => {
       if (err.isTransferFailure) return { success: false, error: err.message, details: err.details, _statusCode: 400 };
       throw err;
     });
@@ -1025,7 +1025,7 @@ router.post('/api/save',
         err.details = result;
         throw err;
       }
-    }).catch(err => {
+    }, 'save').catch(err => {
       if (err.isTransferFailure) return { success: false, error: 'Transfer failed', details: err.details, _statusCode: 400 };
       throw err;
     });
@@ -1152,7 +1152,7 @@ router.post('/api/withdraw',
         err.details = result;
         throw err;
       }
-    }).catch(err => {
+    }, 'withdraw').catch(err => {
       if (err.isTransferFailure) return { success: false, error: 'Withdrawal failed', details: err.details, _statusCode: 400 };
       throw err;
     });
@@ -1251,7 +1251,7 @@ router.post('/api/goals/:goalId/allocate',
       });
       clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
       return { success: true, message: `MWK ${parsedAmount} allocated to ${goalName}`, reference, goal: updatedGoal, transactionId: txRef.id };
-    }).catch(err => {
+    }, 'goal-allocate').catch(err => {
       if (err.statusCode || err.isTransferFailure) {
         return { success: false, error: err.message, details: err.details, _statusCode: err.statusCode || 400 };
       }
@@ -1352,7 +1352,7 @@ router.post('/api/goals/:goalId/deallocate',
         reference,
         message: 'MWK ' + deallocated.toLocaleString() + ' moved from ' + goalName + ' to your account balance.'
       };
-    }).catch(err => {
+    }, 'goal-deallocate').catch(err => {
       if (err.statusCode) return { success: false, error: err.message, _statusCode: err.statusCode };
       throw err;
     });
@@ -1632,7 +1632,7 @@ router.post('/api/roundup',
       });
       clearCache(`profile_${uid}`, `goals_${uid}`, `analytics_${uid}`);
       return { success: true, roundUpAmount, reference, goal: updated };
-    });
+    }, 'roundup');
 
     res.json(outcome);
   })
@@ -1687,7 +1687,7 @@ router.post('/api/merchant/collect',
       });
       clearCache(`analytics_${uid}`);
       return { success, result, reference: ref, fee: fee.total };
-    });
+    }, 'merchant-collect');
 
     res.json(outcome);
   })
@@ -1742,7 +1742,7 @@ router.post('/api/merchant/disburse',
       });
       clearCache(`analytics_${uid}`);
       return { success, result, reference: ref, fee: fee.total };
-    });
+    }, 'merchant-disburse');
 
     res.json(outcome);
   })
@@ -1931,7 +1931,7 @@ router.post('/api/merchant/pay',
         err.details = result;
         throw err;
       }
-    }).catch(err => {
+    }, 'merchant-pay').catch(err => {
       if (err.isTransferFailure) return { success: false, error: 'Payment failed', details: err.details, _statusCode: 400 };
       throw err;
     });
@@ -2067,7 +2067,7 @@ router.post('/api/transfer',
       });
       clearCache(`profile_${uid}`, `profile_${merchantDoc.id}`, `analytics_${uid}`, `analytics_${merchantDoc.id}`);
       return { success: true, message: `MWK ${parsedAmount} sent to ${merchantName}`, reference, transactionId: payerTxRef.id, fee: feeTotal, netToMerchant, merchantName };
-    }).catch(err => {
+    }, 'transfer').catch(err => {
       if (err.isTransferFailure) return { success: false, error: err.message, details: err.details, _statusCode: 400 };
       throw err;
     });
