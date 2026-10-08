@@ -6,7 +6,7 @@ import { existsSync } from 'fs';
 import crypto from 'crypto';
 import { validateEnvironment, db, adminAuth } from './core/firebase.js';
 import { AIRTEL, PAYCHANGU, SECURITY, resolvePaymentProvider, isMockMode } from './core/config.js';
-import { sanitizeBody, rateLimit, requireAuth, serializeUserMutation } from './core/middleware.js';
+import { sanitizeBody, rateLimit, requireAuth, requireAdmin, serializeUserMutation } from './core/middleware.js';
 import { requireTransactionPin } from './core/transaction-pin-guard.js';
 import { log, logSystemError, sendExternalAlert, fetchWithRetry } from './helpers.js';
 import { sendEmail, buildWelcomeEmail } from './services/email.js';
@@ -108,6 +108,50 @@ app.use('/api/paychangu/notification', async (req,res,next)=>{
 app.use('/api/save',serializeUserMutation);app.use('/api/subscribe',serializeUserMutation);app.use('/api/withdraw',serializeUserMutation);app.use('/api/transfer',serializeUserMutation);app.use('/api/merchant/pay',serializeUserMutation);app.use('/api/merchant/collect',serializeUserMutation);app.use('/api/merchant/disburse',serializeUserMutation);app.use('/api/roundup',serializeUserMutation);app.use('/api/goals/:goalId/allocate',serializeUserMutation);app.use('/api/goals/:goalId/deallocate',serializeUserMutation);
 app.use('/api/withdraw',requireTransactionPin);app.use('/api/transfer',requireTransactionPin);app.use('/api/merchant/pay',requireTransactionPin);app.use('/api/merchant/disburse',requireTransactionPin);
 app.post('/api/profile',requireAuth,async(req,res,next)=>{const uid=req.user.uid;try{const snap=await db.collection('users').doc(uid).get();const data=snap.data()||{};if(!data.welcomeEmailSentAt){const user=await adminAuth.getUser(uid);if(user.email){const name=data.name||user.displayName||req.body.name||'there';try{const template=buildWelcomeEmail(name);const result=await sendEmail({to:user.email,subject:'Welcome to PocketVault 🇲🇼',idempotencyKey:`welcome-user/${uid}`,tags:[{name:'category',value:'welcome'},{name:'product',value:'pocketvault'}],...template});await db.collection('users').doc(uid).set({welcomeEmailSentAt:new Date().toISOString(),welcomeEmailId:result?.id||null},{merge:true});}catch(emailError){log.warn('Welcome email failed; continuing profile request',{uid,error:emailError.message,code:emailError.code||null});}}}}catch(error){log.warn('Welcome email preflight failed; continuing profile request',{uid,error:error.message});}next();});
+// SECURITY: data exports must never include authentication material such as
+// transaction-PIN hashes/salts or active OTP state. The legacy route handlers
+// returned the raw users document, so these guarded replacements run first.
+const redactExportProfile=(profile={})=>{
+  const safe={...profile};
+  delete safe.transactionPin;
+  delete safe.otpHash;
+  delete safe.otpExpiry;
+  delete safe.otpAttempts;
+  delete safe.pendingPhone;
+  return safe;
+};
+app.get('/api/account/export',requireAuth,async(req,res,next)=>{
+  try{
+    const uid=req.user.uid;
+    const [userSnap,goalsSnap,txSnap,notifSnap,autosaveSnap]=await Promise.all([
+      db.collection('users').doc(uid).get(),db.collection('goals').where('uid','==',uid).get(),
+      db.collection('transactions').where('uid','==',uid).limit(1000).get(),
+      db.collection('notifications').where('uid','==',uid).limit(500).get(),
+      db.collection('autosave_rules').where('uid','==',uid).get()
+    ]);
+    const collect=snap=>snap.docs.map(d=>({id:d.id,...d.data()}));
+    res.setHeader('Content-Disposition',`attachment; filename="pocketvault-data-export-${uid}.json"`);
+    res.json({exportedAt:new Date().toISOString(),profile:redactExportProfile(userSnap.data()||{}),goals:collect(goalsSnap),transactions:collect(txSnap),notifications:collect(notifSnap),autosaveRules:collect(autosaveSnap)});
+  }catch(error){next(error);}
+});
+app.get('/api/admin/users/:uid/export',requireAdmin,async(req,res,next)=>{
+  try{
+    const uid=req.params.uid;
+    const authUser=await adminAuth.getUser(uid).catch(()=>null);
+    if(!authUser)return res.status(404).json({success:false,error:'User not found'});
+    const [userSnap,goalsSnap,txSnap,notifSnap,autosaveSnap]=await Promise.all([
+      db.collection('users').doc(uid).get(),db.collection('goals').where('uid','==',uid).get(),
+      db.collection('transactions').where('uid','==',uid).limit(1000).get(),
+      db.collection('notifications').where('uid','==',uid).limit(500).get(),
+      db.collection('autosave_rules').where('uid','==',uid).get()
+    ]);
+    const collect=snap=>snap.docs.map(d=>({id:d.id,...d.data()}));
+    log.info('Admin exported user data',{uid,exportedVia:'admin'});
+    res.setHeader('Content-Disposition',`attachment; filename="pocketvault-data-export-${uid}.json"`);
+    res.json({exportedAt:new Date().toISOString(),exportedByAdmin:true,authAccount:{email:authUser.email,displayName:authUser.displayName||null,createdAt:authUser.metadata?.creationTime||null},profile:redactExportProfile(userSnap.data()||{}),goals:collect(goalsSnap),transactions:collect(txSnap),notifications:collect(notifSnap),autosaveRules:collect(autosaveSnap)});
+  }catch(error){next(error);}
+});
+
 app.use('/',userRoutes);app.use('/',userAIRoutes);app.use('/',userAIInsightRoutes);app.use('/',userSupportAIRoutes);app.use('/',transactionPinRoutes);app.use('/',referralAdminRoutes);app.use('/',systemAIRoutes);app.use('/',adminRoutes);app.use('/',emailRoutes);app.use('/admin',express.static(join(__dirname,'admin')));
 app.get('*',(req,res)=>{if(req.path.startsWith('/admin')){const adminIndex=join(__dirname,'admin','index.html');if(existsSync(adminIndex))return res.sendFile(adminIndex);return res.status(404).json({success:false,error:'Admin panel not deployed'});}const indexPath=join(__dirname,'index.html');if(existsSync(indexPath))res.sendFile(indexPath);else res.status(200).json({status:'ok',app:'PocketVault API',message:'Backend running. No frontend deployed yet.',health:'/api/health'});});
 app.use((err,req,res,next)=>{const message=err.message||'Unknown error';log.error('Unhandled request error',{requestId:req.requestId,url:req.url,method:req.method,error:message,stack:err.stack});logSystemError('express',message,{stack:err.stack,url:req.url,method:req.method,requestId:req.requestId});sendExternalAlert('Unhandled request error',`${req.method} ${req.url}\n${message}\nRequest: ${req.requestId}`);if(err.statusCode&&err.statusCode>=400&&err.statusCode<500)return res.status(err.statusCode).json({success:false,error:message,requestId:req.requestId});const unavailable=err.code===14||err.code===4||/UNAVAILABLE|DEADLINE_EXCEEDED/i.test(message);if(unavailable)return res.status(503).json({success:false,error:'Our database is temporarily unavailable. Please try again in a few moments.',requestId:req.requestId});res.status(500).json({success:false,error:'Something went wrong. Please try again.',requestId:req.requestId});});
